@@ -132,6 +132,11 @@ public class InMemoryStorageEngine<K, V> implements IStorageEngine<K, V> {
         return new InMemoryIterator<K, V>(map);
     }
 
+
+    public void writeDownFortestGit(){
+        System.out.println("Is Git OK?");
+    }
+
     @Override
     public IClosableIterator<K> keys() {
         // TODO Implement more efficient version.
