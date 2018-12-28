@@ -984,9 +984,12 @@ public class OFSwitchManager implements IOFSwitchManager, INewOFConnectionListen
 			bossGroup = new NioEventLoopGroup();
 			workerGroup = new NioEventLoopGroup();
 
+			//使用到了JBoss 的Netty框架
+			//  //创建Netty的服务端ServerBootstrap
 			ServerBootstrap bootstrap = new ServerBootstrap()
 			.group(bossGroup, workerGroup)
 			.channel(NioServerSocketChannel.class)
+					//创建处理Switch连接的工厂
 			.option(ChannelOption.SO_REUSEADDR, true)
 			.option(ChannelOption.SO_KEEPALIVE, true)
 			.option(ChannelOption.TCP_NODELAY, true)
@@ -1007,6 +1010,7 @@ public class OFSwitchManager implements IOFSwitchManager, INewOFConnectionListen
 
 			cg = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
+			//设置服务端处理连接的工厂
 			Set<InetSocketAddress> addrs = new HashSet<InetSocketAddress>();
 			if (floodlightProvider.getOFAddresses().isEmpty()) {
 				cg.add(bootstrap.bind(new InetSocketAddress(InetAddress.getByAddress(IPv4Address.NONE.getBytes()), floodlightProvider.getOFPort().getPort())).channel());
@@ -1015,7 +1019,8 @@ public class OFSwitchManager implements IOFSwitchManager, INewOFConnectionListen
 					addrs.add(new InetSocketAddress(InetAddress.getByAddress(ip.getBytes()), floodlightProvider.getOFPort().getPort()));
 				}
 			}
-			
+
+			//将服务端加入线程池
 			for (InetSocketAddress sa : addrs) {
 				cg.add(bootstrap.bind(sa).channel());
 				log.info("Listening for switch connections on {}", sa);

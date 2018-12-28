@@ -96,6 +96,7 @@ import com.google.common.base.Strings;
 /**
  * The main controller class.  Handles all setup and network listeners
  */
+//run方法实现功能
 public class Controller implements IFloodlightProviderService, IStorageSourceListener, IInfoProvider {
 
     protected static final Logger log = LoggerFactory.getLogger(Controller.class);
@@ -427,12 +428,14 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
         if (this.notifiedRole == HARole.STANDBY) {
             counters.dispatchMessageWhileStandby.increment();
             // We are SLAVE. Do not dispatch messages to listeners.
+            //Controller分为Master/Equal/Slave,其中Slave作为冷备用机,不接受任何消息,只在其他Controller出错时使用
             return;
         }
         counters.dispatchMessage.increment();
 
         switch (m.getType()) {
             case PACKET_IN:
+                //采集包数目计数+1,流采样需要获取其计数并修改计数方法
             	counters.packetIn.increment();
                 OFPacketIn pi = (OFPacketIn)m;
 
@@ -440,9 +443,11 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
                     log.error("Ignoring PacketIn (Xid = " + pi.getXid() + ") because the data field is empty.");
                     return;
                 }
-
+                //  默认情况下总是true
                 if (Controller.ALWAYS_DECODE_ETH) {
                     eth = new Ethernet();
+                    //解析packet_in消息到eth中，所以下面的bcStore可以直接存储
+                    //将包解析成IPacket格式
                     eth.deserialize(pi.getData(), 0, pi.getData().length);
                 }
                 // fall through to default case...
@@ -465,6 +470,8 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
                         bc = bContext;
                     }
                     if (eth != null) {
+                        //将包放入bcstore(本质是一个concurrentHashMap)中
+                        //所以当我们添加自己的模块来监听packetin消息的时候，可以从中取出，做自己的业务处理。
                         IFloodlightProviderService.bcStore.put(bc,
                                 IFloodlightProviderService.CONTEXT_PI_PAYLOAD,
                                 eth);
@@ -478,6 +485,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
                     Command cmd;
                     for (IOFMessageListener listener : listeners) {
                         pktinProcTimeService.recordStartTimeComp(listener);
+                        // 遍历所有对packetin感兴趣的listener，分别执行他们的receive方法,将包信息通知给这个listener；
                         cmd = listener.receive(sw, m, bc);
                         pktinProcTimeService.recordEndTimeComp(listener);
 
@@ -682,6 +690,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
             logListeners();
         }
 
+        //主循环
         while (true) {
             try {
                 IUpdate update = updates.take();

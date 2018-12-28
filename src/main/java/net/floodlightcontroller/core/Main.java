@@ -40,6 +40,8 @@ public class Main {
 	 * @param args
 	 * @throws FloodlightModuleException 
 	 */
+
+	/******初始化IFloodlightModuleContext变量，启动Controller和RESTApi Service*/
 	public static void main(String[] args) throws FloodlightModuleException {
 		try {
 			// Setup logger
@@ -58,6 +60,7 @@ public class Main {
 			// Load modules
 			FloodlightModuleLoader fml = new FloodlightModuleLoader();
 			try {
+				//初始化Context变量(从配置文件加载配置信息并加载模块)
 				IFloodlightModuleContext moduleContext = fml.loadModulesFromConfig(settings.getModuleFile());
 				IRestApiService restApi = moduleContext.getServiceImpl(IRestApiService.class);
 				restApi.run(); 
