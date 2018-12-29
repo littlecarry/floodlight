@@ -245,6 +245,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
         /**
          * Calls the appropriate listeners
          */
+        //调度接口,调用适当的listener
         public void dispatch();
     }
         
@@ -435,6 +436,9 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
 
         switch (m.getType()) {
             case PACKET_IN:
+                //TODO:此处添加采样逻辑
+
+
                 //采集包数目计数+1,流采样需要获取其计数并修改计数方法
             	counters.packetIn.increment();
                 OFPacketIn pi = (OFPacketIn)m;
@@ -465,6 +469,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
                     // function, if so use that floodlight context, otherwise
                     // allocate one
                     if (bContext == null) {
+                        //从缓存栈中弹出一个FloodlightContext消息(不存在的话新建一个map)
                         bc = flcontext_alloc();
                     } else {
                         bc = bContext;
@@ -474,7 +479,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
                         //所以当我们添加自己的模块来监听packetin消息的时候，可以从中取出，做自己的业务处理。
                         IFloodlightProviderService.bcStore.put(bc,
                                 IFloodlightProviderService.CONTEXT_PI_PAYLOAD,
-                                eth);
+                                eth)    ;
                     }
 
                     // Get the starting time (overall and per-component) of
@@ -691,6 +696,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
         }
 
         //主循环
+        // 不断处理阻塞队列中SW的更新信息 (在循环中随时处理SW的更新消息，开始分发事件给监听者)
         while (true) {
             try {
                 IUpdate update = updates.take();
