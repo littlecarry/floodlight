@@ -60,7 +60,8 @@ public class Main {
 			try {
 				IFloodlightModuleContext moduleContext = fml.loadModulesFromConfig(settings.getModuleFile());
 				IRestApiService restApi = moduleContext.getServiceImpl(IRestApiService.class);
-				restApi.run(); 
+				restApi.run();
+				//启动rest服务
 			} catch (FloodlightModuleConfigFileNotFoundException e) {
 				// we really want to log the message, not the stack trace
 				logger.error("Could not read config file: {}", e.getMessage());
@@ -68,6 +69,7 @@ public class Main {
 			}
 			try {
                 fml.runModules(); // run the controller module and all modules
+				//启动floodlight住模快和其他模块
             } catch (FloodlightModuleException e) {
                 logger.error("Failed to run controller modules", e);
                 System.exit(1);

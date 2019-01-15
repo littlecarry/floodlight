@@ -141,6 +141,12 @@ public class Forwarding extends ForwardingBase implements IFloodlightModule, IOF
             return id;
         }
 
+
+        /**流id-npt对注册到两个hasMap中，方便查询
+         * npt（对应某个交换机的某个端口）
+         * @param npt
+         * @param flowSetId
+         */
         private void registerFlowSetId(NodePortTuple npt, U64 flowSetId) {
             if (nptToFlowSetIds.containsKey(npt)) {
                 Set<U64> ids = nptToFlowSetIds.get(npt);
