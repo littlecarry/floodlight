@@ -44,6 +44,9 @@ import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.types.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import net.floodlightcontroller.sampling.PacketInSampling;
+import net.floodlightcontroller.Constant.BaseConstant;
+
 
 
 /**
@@ -88,6 +91,9 @@ public abstract class ForwardingBase implements IOFMessageListener {
     protected IDebugCounterService debugCounterService;
     protected ILinkDiscoveryService linkService;
     protected IRestApiService restApiService;
+    protected PacketInSampling packetInSampling;
+    protected BaseConstant baseConstant;
+
 
     // flow-mod - for use in the cookie
     public static final int FORWARDING_APP_ID = 2;
@@ -135,6 +141,10 @@ public abstract class ForwardingBase implements IOFMessageListener {
 
         switch (msg.getType()) {
         case PACKET_IN:
+            //1.判定在新流还是在旧流 2.若新流，则在某个时钟周期内确定一个p，并记录每个时钟周期的p。
+            //int newPacketCounter = packetInSampling.newPacketCounter();
+
+
             IRoutingDecision decision = null;
             if (cntx != null) {
                 decision = RoutingDecision.rtStore.get(cntx, IRoutingDecision.CONTEXT_DECISION);

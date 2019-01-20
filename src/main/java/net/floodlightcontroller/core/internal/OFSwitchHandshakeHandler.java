@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 
 import io.netty.util.Timer;
+import net.floodlightcontroller.QoSEvaluation.NetworkMeter;
 import net.floodlightcontroller.core.HARole;
 import net.floodlightcontroller.core.IOFConnection;
 import net.floodlightcontroller.core.IOFConnectionBackend;
@@ -25,50 +26,7 @@ import net.floodlightcontroller.core.PortChangeEvent;
 import net.floodlightcontroller.core.SwitchDescription;
 import net.floodlightcontroller.core.internal.OFSwitchAppHandshakePlugin.PluginResultType;
 
-import org.projectfloodlight.openflow.protocol.OFActionType;
-import org.projectfloodlight.openflow.protocol.OFBadRequestCode;
-import org.projectfloodlight.openflow.protocol.OFBarrierReply;
-import org.projectfloodlight.openflow.protocol.OFBarrierRequest;
-import org.projectfloodlight.openflow.protocol.OFBundleCtrlMsg;
-import org.projectfloodlight.openflow.protocol.OFControllerRole;
-import org.projectfloodlight.openflow.protocol.OFDescStatsReply;
-import org.projectfloodlight.openflow.protocol.OFDescStatsRequest;
-import org.projectfloodlight.openflow.protocol.OFErrorMsg;
-import org.projectfloodlight.openflow.protocol.OFErrorType;
-import org.projectfloodlight.openflow.protocol.OFExperimenter;
-import org.projectfloodlight.openflow.protocol.OFFactories;
-import org.projectfloodlight.openflow.protocol.OFFactory;
-import org.projectfloodlight.openflow.protocol.OFFeaturesReply;
-import org.projectfloodlight.openflow.protocol.OFFlowAdd;
-import org.projectfloodlight.openflow.protocol.OFFlowDelete;
-import org.projectfloodlight.openflow.protocol.OFFlowDeleteStrict;
-import org.projectfloodlight.openflow.protocol.OFFlowModFailedCode;
-import org.projectfloodlight.openflow.protocol.OFFlowRemoved;
-import org.projectfloodlight.openflow.protocol.OFGetConfigReply;
-import org.projectfloodlight.openflow.protocol.OFGetConfigRequest;
-import org.projectfloodlight.openflow.protocol.OFGroupBucket;
-import org.projectfloodlight.openflow.protocol.OFGroupDelete;
-import org.projectfloodlight.openflow.protocol.OFGroupType;
-import org.projectfloodlight.openflow.protocol.OFMessage;
-import org.projectfloodlight.openflow.protocol.OFNiciraControllerRole;
-import org.projectfloodlight.openflow.protocol.OFNiciraControllerRoleReply;
-import org.projectfloodlight.openflow.protocol.OFNiciraControllerRoleRequest;
-import org.projectfloodlight.openflow.protocol.OFPacketIn;
-import org.projectfloodlight.openflow.protocol.OFPortDescStatsReply;
-import org.projectfloodlight.openflow.protocol.OFPortStatus;
-import org.projectfloodlight.openflow.protocol.OFQueueGetConfigReply;
-import org.projectfloodlight.openflow.protocol.OFRoleReply;
-import org.projectfloodlight.openflow.protocol.OFRoleRequest;
-import org.projectfloodlight.openflow.protocol.OFRoleStatus;
-import org.projectfloodlight.openflow.protocol.OFSetConfig;
-import org.projectfloodlight.openflow.protocol.OFStatsReply;
-import org.projectfloodlight.openflow.protocol.OFStatsReplyFlags;
-import org.projectfloodlight.openflow.protocol.OFStatsRequestFlags;
-import org.projectfloodlight.openflow.protocol.OFStatsType;
-import org.projectfloodlight.openflow.protocol.OFTableFeaturesStatsReply;
-import org.projectfloodlight.openflow.protocol.OFTableFeaturesStatsRequest;
-import org.projectfloodlight.openflow.protocol.OFType;
-import org.projectfloodlight.openflow.protocol.OFVersion;
+import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.actionid.OFActionId;
 import org.projectfloodlight.openflow.protocol.errormsg.OFBadRequestErrorMsg;
@@ -574,11 +532,22 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 			unhandledMessageReceived(m);
 		}
 
+		/**
+		 *握手，处理收到的报文信息
+		 * @param m
+		 * --zigzag 修改于20190120.1702
+		 * --参考资料： 51CTO 胡-1版-11节-08：01分
+		 */
 		void processOFStatsReply(OFStatsReply m) {
 			switch(m.getStatsType()) {
 			case PORT_DESC:
 				processPortDescStatsReply((OFPortDescStatsReply) m);
 				break;
+			case FLOW: //网络（带宽）测量更改
+				NetworkMeter.handleFlowStatsReply((OFFlowStatsReply) m, sw);
+				break;
+			case PORT://网络（丢包）测量更改
+				NetworkMeter.handlePortStatsReply((OFPortStatsReply) m, sw);
 			default:
 				unhandledMessageReceived(m);
 			}

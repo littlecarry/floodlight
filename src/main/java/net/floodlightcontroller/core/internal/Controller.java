@@ -359,6 +359,7 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
 
         switch (m.getType()) {
             case PACKET_IN:
+                //某些packetIn消息可以进行自己的逻辑处理，然后返回，不用再传送给其他模块  -zigzag
             	counters.packetIn.increment();
                 OFPacketIn pi = (OFPacketIn)m;
 
@@ -389,6 +390,12 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
                 if (messageListeners.containsKey(m.getType())) {
                     listeners = messageListeners.get(m.getType()).getOrderedListeners();
                 }
+
+                //观察模块输出加载顺序   -zigzag
+                for(IOFMessageListener l : listeners){
+                    System.out.println("------------->"+l.getName());
+                }
+
 
                 FloodlightContext bc = null;
                 if (listeners != null) {
