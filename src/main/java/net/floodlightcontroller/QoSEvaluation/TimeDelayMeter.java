@@ -6,6 +6,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.QoSEvaluation.NetworkMeter;
 import org.projectfloodlight.openflow.protocol.OFPacketOut.Builder;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
@@ -46,6 +47,7 @@ public class TimeDelayMeter {
         ILinkDiscoveryService linkService = networkMeter.getLinkService();
         //得到所有链路
         Map<Link, LinkInfo> links = linkService.getLinks(); //该links是有向的，同一的两个方向记为两条链路
+        //System.out.println("isEmpty:"+links.entrySet().isEmpty());
         for(Link l :links.keySet()){
             //得到每条链路两端的地址和端口号
             IOFSwitch fromSw = networkMeter.getSwitchService().getSwitch(l.getSrc());
@@ -57,7 +59,9 @@ public class TimeDelayMeter {
             sendPacketOut(fromSw,inPort,toSw,outPort);
             sendEchoRequest(fromSw);
             sendEchoRequest(toSw);
+            //MyLog.info("时延测量发起请求----发送packetout与echo消息");
         }
+        //MyLog.info("时延测量发起请求-测量完成");
     }
 
     public void  sendPacketOut(IOFSwitch fromSw, OFPort inPort, IOFSwitch toSw, OFPort outPort){

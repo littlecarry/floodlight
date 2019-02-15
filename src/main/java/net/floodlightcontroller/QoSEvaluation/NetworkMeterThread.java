@@ -23,11 +23,16 @@ public class NetworkMeterThread  extends Thread{
         while(true){
             try{
                 //TODO 测量间隔需要是动态的，不恒定是2s
-                sleep(2000);
+                sleep(500);
             } catch (Exception e){
                 e.printStackTrace();
             }
+            //clear
+            NetworkStore networkStore =NetworkStore.getInstance();
+            networkStore.calCurrentBand();
+            networkStore.nextMeterBegin();
             //TODO
+
             IOFSwitchService switches = networkMeter.getSwitchService();
             //得到并遍历所有交换机ID
             for(DatapathId switchId: switches.getAllSwitchDpids()){

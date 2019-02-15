@@ -1269,10 +1269,10 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 			roleChanger.deliverRoleReply(m.getXid(), m.getRole());
 		}
 
-		@Override
+		/*@Override
 		void processOFStatsReply(OFStatsReply m) {
 			illegalMessageReceived(m);
-		}
+		}*/
 
 		@Override
 		void processOFPortStatus(OFPortStatus m) {

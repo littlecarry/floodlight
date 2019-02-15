@@ -50,7 +50,7 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
 
     @Override
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-        System.out.println("模块可以监听到消息- In Recieve");
+        //System.out.println("模块可以监听到消息- In Recieve");
         switch(msg.getType()){
             case PACKET_IN:
                 //bcStore:相当于队列
@@ -83,6 +83,7 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
         // --声明后置名模快
         //对packetin消息的处理排在linkdiscovery前(所以是第一个处理packetin消息的模块)
         return type.equals(OFType.PACKET_IN)&&(name.equals("linkdiscovery"));
+        //return false;
     }
 
     @Override

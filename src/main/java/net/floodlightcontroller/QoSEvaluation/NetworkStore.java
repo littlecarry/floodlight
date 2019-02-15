@@ -56,6 +56,8 @@ public class NetworkStore {
         return ns;
 
     }
+
+    //packetin和echo消息结合测时延
     public void handlePacketIn(IPacket iPacket, ILinkDiscoveryService linkService){
         IPv4 ip = (IPv4)iPacket;
         Data data = (Data)ip.getPayload();
@@ -78,7 +80,7 @@ public class NetworkStore {
         }
 
 
-        System.out.println("allTime:=============="+allTime);
+        //System.out.println("allTime:=============="+allTime);
         //找出对应链路（有且只有单向的一条）
         Map<Link, LinkInfo> links = linkService.getLinks();
         for(Link l:links.keySet()){
@@ -131,6 +133,7 @@ public class NetworkStore {
 
 
     //TODO
+    //端口消息测丢包率
     public void handlePortStatsReply(OFPortStatsReply reply, IOFSwitchBackend aSwitch){
         List<OFPortStatsEntry> portStatsEntries = reply.getEntries();//得到消息体
         for(OFPortStatsEntry entry: portStatsEntries){
@@ -149,7 +152,7 @@ public class NetworkStore {
 
 
     /**
-     * 处理FlowStataReply消息
+     * 处理FlowStataReply消息--获得带宽（band）测量的原始数据
      * @param reply
      * @param sw
      */
@@ -162,7 +165,9 @@ public class NetworkStore {
         for(OFFlowStatsEntry e:entries){
             byteCount = e.getByteCount().getValue();
             inPort = e.getMatch().get(MatchField.IN_PORT);
-            if(inPort == null){//to controller
+
+            if(inPort == null) {//to controller
+                //MyLog.info("inPort is null, WARN in handleFlowStatsReply module");
                 inPort = OFPort.ALL;
             }
             //得到outPort
@@ -199,21 +204,32 @@ public class NetworkStore {
     }
     //存储
     public void storeLinkStatus(LinkDataInfo ldi){
+        if(currentLinkStatus==null){
+            System.out.println("currentLinkStatus为null");
+            return;
+        }
+
+        //System.out.println(currentLinkStatus+"===============");
+        System.out.println("currentLinkInfo is null?"+(ldi==null));
         if(currentLinkStatus.size()==0)//first time
+        {
             currentLinkStatus.add(ldi);
+            //System.out.println(currentLinkStatus+"===============After");
+        }
         else{
-            for(LinkDataInfo l : currentLinkStatus){
-                if(l.getFromSw().getId()==ldi.getFromSw().getId()&&
-                        l.getToSw().getId()==ldi.getToSw().getId()&&
-                        l.getInPort().getPortNumber()==ldi.getInPort().getPortNumber()&&
-                        l.getOutPort().getPortNumber()==ldi.getOutPort().getPortNumber()){
-                    l.setByteCount(l.getByteCount()+ldi.getByteCount());
+            for (LinkDataInfo l : currentLinkStatus) {
+                if (l.getFromSw().getId() == ldi.getFromSw().getId() &&
+                        l.getToSw().getId() == ldi.getToSw().getId() &&
+                        l.getInPort().getPortNumber() == ldi.getInPort().getPortNumber() &&
+                        l.getOutPort().getPortNumber() == ldi.getOutPort().getPortNumber()) {
+                    l.setByteCount(l.getByteCount() + ldi.getByteCount());
                 }
             }
             //new
             currentLinkStatus.add(ldi);
         }
     }
+
     public void nextMeterBegin(){
         historyLinkStatus.clear();
         for(LinkDataInfo l:currentLinkStatus){
@@ -256,7 +272,7 @@ public class NetworkStore {
                         h.getOutPort().getPortNumber()==c.getOutPort().getPortNumber()){
                     long speed = (c.getByteCount()-h.getByteCount())/1;
                     float band = (float) (speed*1.0/c.maxBand);
-//					System.out.println("currentspeed:"+speed+"Bps"+"currentBand:"+band*100+"%");
+					System.out.println("currentspeed:"+speed+"Bps"+"    currentBand:"+band*100+"%");
                 }
             }
 

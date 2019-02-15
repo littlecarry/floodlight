@@ -392,10 +392,10 @@ public class Controller implements IFloodlightProviderService, IStorageSourceLis
                 }
 
                 //观察模块输出加载顺序   -zigzag
-                for(IOFMessageListener l : listeners){
+                /*for(IOFMessageListener l : listeners){
                     System.out.println("------------->"+l.getName());
                 }
-
+*/
 
                 FloodlightContext bc = null;
                 if (listeners != null) {

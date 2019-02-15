@@ -331,7 +331,7 @@ implements IFloodlightModule, IVirtualNetworkService, IOFMessageListener {
 	public boolean isCallbackOrderingPrereq(OFType type, String name) {
 		// Link discovery should go before us so we don't block LLDPs
 		return (type.equals(OFType.PACKET_IN) &&
-				(name.equals("linkdiscovery") || (name.equals("devicemanager"))));
+				(name.equals("linkdiscovery") || (name.equals("NodeSelection"))));
 	}
 
 	@Override

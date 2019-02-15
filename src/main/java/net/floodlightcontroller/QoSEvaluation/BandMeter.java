@@ -38,7 +38,7 @@ public class BandMeter {
         //ANY表示是任意的Group，不关心
         request.setOutGroup(OFGroup.ANY);
         request.setCookie(AppCookie.makeCookie(2, 0));
-        MyLog.info("带宽测量发起请求");
+        //MyLog.info("带宽测量发起请求-发送？请求");
         aSwitch.write(request.build());
 
     }
