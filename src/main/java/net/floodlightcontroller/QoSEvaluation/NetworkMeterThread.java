@@ -18,7 +18,7 @@ public class NetworkMeterThread  extends Thread{
         this.networkMeter = networkMeter;
     };
 
-    public void run(){
+    /*public void run(){
         //一直采样 TODO 仅在一些时刻的一些节点采样
         while(true){
             try{
@@ -38,6 +38,40 @@ public class NetworkMeterThread  extends Thread{
             for(DatapathId switchId: switches.getAllSwitchDpids()){
                 IOFSwitch aSwitch = switches.getSwitch(switchId);
                 if(aSwitch ==null){
+                    MyLog.warn("交换机为空-sw is null");
+                    continue;
+                }
+                //TODO
+                networkMeter.getBandMeter().doBandMeter(aSwitch);
+                networkMeter.getPacketLossMeter().doPacketLossMeter(aSwitch);
+            }
+            networkMeter.getTimeDelayMeter().doTimeDelayMeter(networkMeter);
+
+        }
+    }*/
+
+    public void run() {
+        
+        //一直采样 TODO 仅在一些时刻的一些节点采样
+        while (true) {
+            try {
+                //TODO 测量间隔需要是动态的，不恒定是2s
+                sleep(500);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            //clear
+            NetworkStore networkStore = NetworkStore.getInstance();
+            networkStore.calCurrentBand();
+            networkStore.nextMeterBegin();
+            //TODO
+
+            IOFSwitchService switches = networkMeter.getSwitchService();
+            //得到并遍历所有交换机ID
+            for (DatapathId switchId : switches.getAllSwitchDpids()) {
+
+                IOFSwitch aSwitch = switches.getSwitch(switchId);
+                if (aSwitch == null) {
                     MyLog.warn("交换机为空-sw is null");
                     continue;
                 }

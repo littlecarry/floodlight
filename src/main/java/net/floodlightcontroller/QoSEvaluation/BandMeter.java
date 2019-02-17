@@ -28,6 +28,11 @@ public class BandMeter {
      * @param aSwitch
      * 测量过程: 1.新建请求（status request）消息，
      */
+    /**
+     *OFFlowStatsRequest
+     *OFAggregateStatsRequest---某个交换机聚合的消息
+     *
+     * */
     void doBandMeter(IOFSwitch aSwitch){
         Builder request = (Builder) aSwitch.getOFFactory().buildFlowStatsRequest();
         //TODO 相关配置可能需要更改 --zigzag
