@@ -545,6 +545,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 				break;
 			case FLOW: //网络（带宽）测量更改
 				NetworkMeter.handleFlowStatsReply((OFFlowStatsReply) m, sw);
+				NetworkMeter.handleFlowStatsReplyForSampling((OFFlowStatsReply) m, sw);
 				break;
 			case PORT://网络（丢包）测量更改
 				NetworkMeter.handlePortStatsReply((OFPortStatsReply) m, sw);

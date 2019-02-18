@@ -26,7 +26,8 @@ public class TimeDelayMeter {
     //des和sourceMac设定为真实网络环境下不会出现的MAC，避免冲突，取值不是固定的
     public static byte[] destinationMACAddress={0x00,0x00,0x00,0x00,0x00,0x00};
     public static byte[] sourceMACAddress={0x00,0x00,0x00,0x00,0x00,0x01};
-    public TimeDelayMeter(){
+
+    public TimeDelayMeter() {
 
     }
 
@@ -43,12 +44,12 @@ public class TimeDelayMeter {
         return true;
     }
 
-    public void doTimeDelayMeter(NetworkMeter networkMeter){
+    public void doTimeDelayMeter(NetworkMeter networkMeter) {
         ILinkDiscoveryService linkService = networkMeter.getLinkService();
         //得到所有链路
         Map<Link, LinkInfo> links = linkService.getLinks(); //该links是有向的，同一的两个方向记为两条链路
         //System.out.println("isEmpty:"+links.entrySet().isEmpty());
-        for(Link l :links.keySet()){
+        for (Link l : links.keySet()) {
             //得到每条链路两端的地址和端口号
             IOFSwitch fromSw = networkMeter.getSwitchService().getSwitch(l.getSrc());
             IOFSwitch toSw = networkMeter.getSwitchService().getSwitch(l.getDst());
@@ -56,7 +57,7 @@ public class TimeDelayMeter {
             OFPort outPort = l.getDstPort();
             //时延 = （控制器到源交换机时间+控制器到目的交换机时间+交换机间时延）-控制器到源交换机时间-控制器到目的交换机时间
             //packetOut消息到echo的时间间隔为（控制器到源交换机时间+控制器到目的交换机时间+交换机间时延）。
-            sendPacketOut(fromSw,inPort,toSw,outPort);
+            sendPacketOut(fromSw, inPort, toSw, outPort);
             sendEchoRequest(fromSw);
             sendEchoRequest(toSw);
             //MyLog.info("时延测量发起请求----发送packetout与echo消息");
@@ -64,12 +65,12 @@ public class TimeDelayMeter {
         //MyLog.info("时延测量发起请求-测量完成");
     }
 
-    public void  sendPacketOut(IOFSwitch fromSw, OFPort inPort, IOFSwitch toSw, OFPort outPort){
+    public void sendPacketOut(IOFSwitch fromSw, OFPort inPort, IOFSwitch toSw, OFPort outPort) {
         Builder packetOutBuilder = fromSw.getOFFactory().buildPacketOut();
 
-        List<OFAction> actions  = new ArrayList<OFAction>();
+        List<OFAction> actions = new ArrayList<OFAction>();
         actions.add(fromSw.getOFFactory().actions().output(inPort, Integer.MAX_VALUE));//packetout消息由控制器发给源交换机，
-                                                                        // Controller-fromSwitch-toSwitch-Controller闭环
+        // Controller-fromSwitch-toSwitch-Controller闭环
         packetOutBuilder.setActions(actions);
         //Ethernet--以太帧头部组成：目的地址+源地址+负载类型（payload）
         Ethernet eth = new Ethernet();
@@ -99,7 +100,7 @@ public class TimeDelayMeter {
 
     }
 
-    public void sendEchoRequest(IOFSwitch aSwitch){
+    public void sendEchoRequest(IOFSwitch aSwitch) {
         org.projectfloodlight.openflow.protocol.OFEchoRequest.Builder request
                 = aSwitch.getOFFactory().buildEchoRequest();
         //只需要填充时间戳，用于计算
@@ -113,7 +114,7 @@ public class TimeDelayMeter {
         aSwitch.write(request.build());
     }
 
-    public String getCurrentTime(){
+    public String getCurrentTime() {
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
         return df.format(new Date());
     }

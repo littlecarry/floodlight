@@ -54,7 +54,8 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
     @Override
     public boolean isCallbackOrderingPrereq(OFType type, String name) {
         //TODO
-        return name.equals("devicemanager");
+        //return name.equals("devicemanager");
+        return false;
     }
 
     @Override
@@ -152,12 +153,14 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                         if (switchMap.containsKey(fromSw)) {
                             SwitchOfDegree sw = switchMap.get(fromSw);
                             sw.outDegree++;
+                            switchMap.put(fromSw, sw);
                         } else {
                             switchMap.put(fromSw, new SwitchOfDegree(fromSw, 0, 1));
                         }
                         if (switchMap.containsKey(toSw)) {
                             SwitchOfDegree sw = switchMap.get(toSw);
                             sw.inDegree++;
+                            switchMap.put(toSw, sw);
                         } else {
                             switchMap.put(toSw, new SwitchOfDegree(toSw, 1, 0));
                         }
@@ -202,6 +205,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                                     if (switchMap.containsKey(iofSwitch) && switchMap.get(iofSwitch).inDegree > 0) {//保证操作是正确的，非源节点（汇聚节点）可能导致操作异常
                                         SwitchOfDegree switchOfDegree = switchMap.get(iofSwitch);
                                         switchOfDegree.inDegree--;
+                                        switchMap.put(iofSwitch, switchOfDegree);
                                     }
                                 }
                             }
@@ -236,6 +240,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                                 if (switchMap.containsKey(iofSwitch) && switchMap.get(iofSwitch).inDegree > 0) {//保证操作是正确的，非源节点（汇聚节点）可能导致操作异常
                                     SwitchOfDegree switchOfDegree = switchMap.get(iofSwitch);
                                     switchOfDegree.inDegree--;
+                                    switchMap.put(iofSwitch, switchOfDegree);
                                 }
                             }
                             switchMap.remove(maxSw);

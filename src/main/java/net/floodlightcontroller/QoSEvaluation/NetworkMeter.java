@@ -150,7 +150,17 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
      */
     public static void handleFlowStatsReply(OFFlowStatsReply reply, IOFSwitchBackend sw){
         NetworkStore networkStore = NetworkStore.getInstance();
-        networkStore.handleFlowStatsReply(reply, sw);
+        networkStore.handleFlowStatsReply_combineWithSwitchPorts(reply, sw);
+    }
+
+
+    /**flowstatsreply的一个中继
+     *
+     * @param reply
+     */
+    public static void handleFlowStatsReplyForSampling(OFFlowStatsReply reply, IOFSwitchBackend sw){
+        NetworkStore networkStore = NetworkStore.getInstance();
+        networkStore.handleFlowStatsReply_combineWithIPAndPorts(reply, sw);
     }
 
     /**portstatsreply的一个中继

@@ -2,11 +2,7 @@ package net.floodlightcontroller.QoSEvaluation;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import net.floodlightcontroller.MyLog;
 import org.projectfloodlight.openflow.protocol.OFActionType;
@@ -23,6 +19,7 @@ import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstructionApplyActions;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.OFPort;
 
 import net.floodlightcontroller.core.IOFSwitchBackend;
@@ -40,10 +37,14 @@ public class NetworkStore {
     protected  List<LinkDataInfo> currentLinkStatus;
     protected List<LinkDataInfo> historyLinkStatus;
     protected List<LinkTimeInfo> linkTimeStatus;
+    //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
+    protected  List<Map<Long, Map<String, Number>>> allFlowAllTimeOfSwitch;
+    protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
     public NetworkStore(){
         currentLinkStatus = new ArrayList<LinkDataInfo>();
         historyLinkStatus = new ArrayList<LinkDataInfo>();
         linkTimeStatus = new ArrayList<LinkTimeInfo>();
+        allFlowAllTimeOfSwitch = new ArrayList<>();
     }
 
     /**
@@ -166,7 +167,123 @@ public class NetworkStore {
     /**
      * 该方法最后给出了每条链路的出入交换机及对应端口号，以及流经比特数（求当前带宽），最大带宽
      */
-    public void handleFlowStatsReply(OFFlowStatsReply reply, IOFSwitchBackend sw) {
+    public void handleFlowStatsReply_combineWithSwitchPorts(OFFlowStatsReply reply, IOFSwitchBackend sw) {
+
+        OFSwitch fromSw, toSw = null;
+        OFPort inPort, outPort = null;
+        long byteCount, maxBand, currentBand = 0;
+        fromSw = toSw = (OFSwitch) sw;
+        List<OFFlowStatsEntry> entries = reply.getEntries();
+        for (OFFlowStatsEntry e : entries) {
+            byteCount = e.getByteCount().getValue();
+            inPort = e.getMatch().get(MatchField.IN_PORT);
+
+            if (inPort == null) {//to controller
+                //MyLog.info("inPort is null, WARN in handleFlowStatsReply module");
+                inPort = OFPort.ALL;
+            }
+            //得到outPort
+            List<OFInstruction> instruction = e.getInstructions();
+            for (OFInstruction i : instruction) {
+                if (i instanceof OFInstructionApplyActions) {
+                    List<OFAction> action = ((OFInstructionApplyActions) i).getActions();
+                    for (OFAction a : action) {
+                        if (a.getType() == OFActionType.OUTPUT) {
+                            outPort = ((OFActionOutput) a).getPort();
+                            break;
+                        }
+                    }
+                } else
+                    continue;
+            }
+            //默认的流表项不需要存储
+            if (inPort == OFPort.ALL || outPort.getPortNumber() < 1) {
+                continue;
+            }
+            //构造链路信息对象
+            maxBand = calculateMaxBand(fromSw, toSw, inPort, outPort);
+            LinkDataInfo ldi = new LinkDataInfo();
+            ldi.setFromSw(fromSw);
+            ldi.setToSw(toSw);
+            ldi.setInPort(inPort);
+            ldi.setOutPort(outPort);
+            ldi.setMaxBand(maxBand);
+            ldi.setByteCount(byteCount);
+            //存储
+            storeLinkStatus(ldi);
+        }
+
+    }
+
+
+    /**
+     *
+     * 作用：用于Sampling流量采样模块
+     * 思路：将匹配域中同一源地址源端口，目的地址目的端口的流合并为一个流，并分配流id，采样时根据流id识别
+     * @param reply
+     * @param sw
+     */
+    public void handleFlowStatsReply_combineWithIPAndPorts(OFFlowStatsReply reply, IOFSwitchBackend sw) {
+
+        long byteCount;
+        //String srcAndDst = null;
+        long srcAndDst = 0;
+        IPv4Address dstAdd,srcAdd;
+        OFPort inPort,outPort=null;
+
+        List<OFFlowStatsEntry> entries = reply.getEntries();
+        Map<Long, Map<String, Number>> flowsThisTerm = new HashMap<>();
+        long time = new Date().getTime();
+
+        for (OFFlowStatsEntry e :entries) {
+            byteCount = e.getByteCount().getValue();//TODO 这里需要求的是包数目
+            dstAdd =e.getMatch().get(MatchField.IPV4_DST);
+            srcAdd = e.getMatch().get(MatchField.IPV4_SRC);
+            inPort =e.getMatch().get(MatchField.IN_PORT);
+            //srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt(); //键（key）用字符串形式实现，与long效果上一样，类型不一样
+            srcAndDst = (srcAdd.getInt()<<16)+dstAdd.getInt();
+
+            if(inPort==null || inPort ==OFPort.ALL) {
+                continue;
+            }
+
+            if(flowsThisTerm.containsKey(srcAndDst)) {
+                Map<String, Number> enums = flowsThisTerm.get(srcAndDst);
+                int count = (int) enums.get("count");
+                enums.put("count", count+byteCount);//TODO 这里为包数目，而不应该加比特数
+                flowsThisTerm.put(srcAndDst, enums);
+            } else {
+                Map<String, Number> enums = new HashMap<>();
+                enums.put("srcIP", srcAdd.getInt());
+                enums.put("dstIP", srcAdd.getInt());
+                enums.put("count", 1);
+                enums.put("time", time);
+                flowsThisTerm.put(srcAndDst, enums);
+            }
+
+        }
+
+        allFlowAllTimeOfSwitch.add(flowsThisTerm);
+
+        if(allFlowAllTimeOfSwitch.size()>MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH) { //将list限制在最大长度以内
+            allFlowAllTimeOfSwitch.remove(0);
+        }
+        //TODO --计算流经该交换机的总包数
+
+    }
+
+
+    /**
+     * 处理FlowStataReply消息--获得带宽（band）测量的原始数据
+     *
+     * @param reply
+     * @param sw
+     */
+    //按流为单位，一个流从源地址到目的地址，因此会有一系列的流表项，而不是一个流表项
+    /**
+     * 该方法最后给出了每条链路的出入交换机及对应端口号，以及流经比特数（求当前带宽），最大带宽
+     */
+    public void handleFlowStatsReply2(OFFlowStatsReply reply, IOFSwitchBackend sw) {
 
         OFSwitch fromSw, toSw = null;
         OFPort inPort, outPort = null;
@@ -293,7 +410,9 @@ public class NetworkStore {
     }
 
 
-
+    public List<Map<Long, Map<String, Number>>> getAllFlowAllTimeOfSwitch() {
+        return allFlowAllTimeOfSwitch;
+    }
 }
 
 class LinkDataInfo {
@@ -411,6 +530,21 @@ class LinkTimeInfo {
 
     public void setDelay(long m) {
         this.delay = m;
+    }
+
+
+}
+
+class MulLinkDataInfo {
+
+    private List<LinkDataInfo> linkDataInfos;
+
+    MulLinkDataInfo() {
+        this.linkDataInfos = new ArrayList<>();
+    }
+
+    public List<LinkDataInfo> getLinkDataInfos() {
+        return linkDataInfos;
     }
 
 
