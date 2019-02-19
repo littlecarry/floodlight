@@ -549,6 +549,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 				break;
 			case PORT://网络（丢包）测量更改
 				NetworkMeter.handlePortStatsReply((OFPortStatsReply) m, sw);
+				break;
 			default:
 				unhandledMessageReceived(m);
 			}

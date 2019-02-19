@@ -40,11 +40,17 @@ public class NetworkStore {
     //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
     protected  List<Map<Long, Map<String, Number>>> allFlowAllTimeOfSwitch;
     protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
+
+    protected List<Double> QoSLists;
+    protected List<Double> securityLists;
+
     public NetworkStore(){
         currentLinkStatus = new ArrayList<LinkDataInfo>();
         historyLinkStatus = new ArrayList<LinkDataInfo>();
         linkTimeStatus = new ArrayList<LinkTimeInfo>();
         allFlowAllTimeOfSwitch = new ArrayList<>();
+        QoSLists = new ArrayList<>();
+        securityLists = new ArrayList<>();
     }
 
     /**
@@ -95,7 +101,7 @@ public class NetworkStore {
                     l.getDstPort().getPortNumber() == Integer.parseInt(mess[4])) {
                 LinkTimeInfo ltf = new LinkTimeInfo();
                 ltf.setL(l);
-                ltf.setAllTime(allTime);
+                ltf.setAllTime(allTime); //
                 linkTimeStatus.add(ltf);
                 break;
             }
@@ -130,7 +136,7 @@ public class NetworkStore {
             if (lti.getCtodsw() != -1 && lti.getCtossw() != -1) {
                 long delay = lti.getAllTime() - lti.getCtodsw() - lti.getCtossw();
                 lti.setDelay(delay >= 0 ? delay : 0);
-                MyLog.info("时延：" + lti.getDelay());
+                MyLog.info("时延：" + lti.getDelay()); //delay为最终的时延
             }
 
         }
@@ -393,6 +399,7 @@ public class NetworkStore {
         }
         return (fromBand >= toBand ? toBand : fromBand);
     }
+
     //计算当前带宽，输出
     public void calCurrentBand() {
         for(LinkDataInfo h:historyLinkStatus)

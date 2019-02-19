@@ -44,6 +44,12 @@ public class TimeDelayMeter {
         return true;
     }
 
+
+    /**
+     *
+     * 教程使用函数 本系统不使用该方法
+     * @param networkMeter
+     */
     public void doTimeDelayMeter(NetworkMeter networkMeter) {
         ILinkDiscoveryService linkService = networkMeter.getLinkService();
         //得到所有链路
@@ -63,6 +69,15 @@ public class TimeDelayMeter {
             //MyLog.info("时延测量发起请求----发送packetout与echo消息");
         }
         //MyLog.info("时延测量发起请求-测量完成");
+    }
+
+    public void doTimeDelayMeterByLinks(IOFSwitch fromSw, IOFSwitch toSw, OFPort inPort, OFPort outPort) {
+            //时延 = （控制器到源交换机时间+控制器到目的交换机时间+交换机间时延）-控制器到源交换机时间-控制器到目的交换机时间
+            //packetOut消息到echo的时间间隔为（控制器到源交换机时间+控制器到目的交换机时间+交换机间时延）。
+            sendPacketOut(fromSw, inPort, toSw, outPort);
+            sendEchoRequest(fromSw);
+            sendEchoRequest(toSw);
+            //MyLog.info("时延测量发起请求----发送packetout与echo消息");
     }
 
     public void sendPacketOut(IOFSwitch fromSw, OFPort inPort, IOFSwitch toSw, OFPort outPort) {
@@ -117,5 +132,6 @@ public class TimeDelayMeter {
     public String getCurrentTime() {
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
         return df.format(new Date());
+
     }
 }

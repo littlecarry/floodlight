@@ -18,6 +18,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.util.AttributeKey;
 import io.netty.util.Timer;
+import net.floodlightcontroller.QoSEvaluation.NetworkMeter;
 import net.floodlightcontroller.core.IOFConnectionBackend;
 import net.floodlightcontroller.core.internal.OFChannelInitializer.PipelineHandler;
 import net.floodlightcontroller.core.internal.OFChannelInitializer.PipelineHandshakeTimeout;
@@ -275,6 +276,7 @@ class OFChannelHandler extends SimpleChannelInboundHandler<Iterable<OFMessage>> 
 				switch(m.getType()){
 				case ECHO_REPLY:
 					processOFEchoReply((OFEchoReply)m);
+					NetworkMeter.handleEchoReply((OFEchoReply) m);
 					break;
 				case ECHO_REQUEST:
 					processOFEchoRequest((OFEchoRequest)m);
