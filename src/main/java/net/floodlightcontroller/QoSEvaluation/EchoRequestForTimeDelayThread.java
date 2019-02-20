@@ -24,7 +24,7 @@ public class EchoRequestForTimeDelayThread extends Thread {
 
             if(!isTheFirstTime) {
                 try {
-                    sleep(5000);
+                    sleep(200);
                 } catch (Exception e) {
                     continue;
                 }

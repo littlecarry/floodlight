@@ -33,7 +33,7 @@ public class NetworkMeterThread  extends Thread{
         while (true) {
             try {
                 //测量间隔需要是动态的，不恒定是2s
-                sleep(50); // TODO 需与采样周期（目前34ms）保持一定关系
+                sleep(5); // TODO 需与采样周期（目前34ms）保持一定关系
             } catch (Exception e) {
                 continue;
             }

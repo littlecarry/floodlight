@@ -16,6 +16,7 @@ import javax.annotation.Nonnull;
 
 import io.netty.util.Timer;
 import net.floodlightcontroller.QoSEvaluation.NetworkMeter;
+import net.floodlightcontroller.QoSEvaluation.NetworkStore;
 import net.floodlightcontroller.core.HARole;
 import net.floodlightcontroller.core.IOFConnection;
 import net.floodlightcontroller.core.IOFConnectionBackend;
@@ -545,7 +546,7 @@ public class OFSwitchHandshakeHandler implements IOFConnectionListener {
 				break;
 			case FLOW: //网络（带宽）测量更改
 				NetworkMeter.handleFlowStatsReply((OFFlowStatsReply) m, sw);
-				NetworkMeter.handleFlowStatsReplyForSampling((OFFlowStatsReply) m, sw);
+				//NetworkMeter.handleFlowStatsReplyForSampling((OFFlowStatsReply) m, sw);
 				break;
 			case PORT://网络（丢包）测量更改
 				NetworkMeter.handlePortStatsReply((OFPortStatsReply) m, sw);

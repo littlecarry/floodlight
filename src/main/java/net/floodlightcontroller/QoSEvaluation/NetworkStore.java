@@ -47,10 +47,15 @@ public class NetworkStore {
 
     //时延
     protected Map<DatapathId, Long> echoReplyDelay;
-    protected Map<String, Double> delayOfLinks;
+    protected Map<String, Double> delayOfLinks;   //key是srcSwitchAndPortAndDstSwitchAndPort
 
     //丢包
-    protected Map<String, Double> droppedPacketsOfLinks;
+    protected Map<String, Double> droppedPacketsOfLinks; //key是srcSwitchAndPort
+
+    //通量
+    protected Map<String, Long> throughOfLinks; //key是dstSwitchAndPort
+    protected Map<String, Long> historyBytesOfLinks; //key是dstSwitchAndPort
+
 
     public NetworkStore(){
         currentLinkStatus = new ArrayList<LinkDataInfo>();
@@ -63,6 +68,8 @@ public class NetworkStore {
         echoReplyDelay = new HashMap<>();
         delayOfLinks = new HashMap<>();
         droppedPacketsOfLinks = new HashMap<>();
+        throughOfLinks = new HashMap<>();
+        historyBytesOfLinks = new HashMap<>();
     }
 
     /**
@@ -88,7 +95,7 @@ public class NetworkStore {
         //封装时用“<>”作了分隔。此时可以通过这种分隔得到对应个数（此处为5个）的内容。
         String mess[] = new String(data.getData()).split("<>");
         if (mess.length != 5) {
-            MyLog.error("length is not 5!");
+            MyLog.error("handlePacketIn-NetworkStore：length is not 5!");
             return;
         }
 
@@ -134,7 +141,8 @@ public class NetworkStore {
                     delayOfLinks.put(key, 0.0 + allTime-srcEchoReplyDelay-dstEchoReplyDelay);
                 } else {
                     delayOfLinks.put(key, new Double(0));
-                    MyLog.warn("handlePacketIn Error: 所测时延小于0， 为" + (allTime-srcEchoReplyDelay-dstEchoReplyDelay));
+                    MyLog.warn("handlePacketIn Error: 所测时延小于0， 为" + allTime+" "+srcEchoReplyDelay+" "+
+                            dstEchoReplyDelay+" "+(allTime-srcEchoReplyDelay-dstEchoReplyDelay));
                 }
                 break;
             }
@@ -152,7 +160,7 @@ public class NetworkStore {
             return;
         String[] data = new String(reply.getData()).split("<>");
         if (data.length != 2) { //当前时间和所属交换机
-            MyLog.error("length is not 2!");
+            MyLog.error("handleEchoReply-NetworkStore： length is not 2!");
             return;
         }
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
@@ -163,10 +171,14 @@ public class NetworkStore {
             DatapathId switchId = DatapathId.of(data[1]);
             time = (currentTime.getTime() - sendTime.getTime())/2; // 该节点到控制器的时延
             if(time>0) {
+                System.out.println("delay------:"+time);
                 echoReplyDelay.put(switchId, time);
             } else { //考虑异常（时延<0）：异常时使用上一次时延，若不存在上一次时延令时延为0.
                 if(!echoReplyDelay.containsKey(switchId)) {
                     echoReplyDelay.put(switchId, new Long(0));
+                    System.out.println("delay------:"+0);
+                } else {
+                    System.out.println("delay------:"+echoReplyDelay.get(switchId));
                 }
             }
 
@@ -208,6 +220,7 @@ public class NetworkStore {
                 MyLog.error("NetworkStore-handlePortStatsReply Error: 丢包率测量出错，丢包或收到的包对象为null");
                 droppedPercent = 0;
             }
+            System.out.println("droppedPackets------:"+droppedPercent);
             droppedPacketsOfLinks.put(key, new Double(droppedPercent));
 
           /*  entry.getTxPackets().getValue();//发送的包数目
@@ -219,7 +232,7 @@ public class NetworkStore {
 
 
     /**
-     * 处理FlowStataReply消息--获得带宽（band）测量的原始数据
+     * 处理FlowStataReply消息--获得通量测量的原始数据
      *
      * @param reply
      * @param sw
@@ -228,50 +241,44 @@ public class NetworkStore {
     /**
      * 该方法最后给出了每条链路的出入交换机及对应端口号，以及流经比特数（求当前带宽），最大带宽
      */
-    public void handleFlowStatsReply_combineWithSwitchPorts(OFFlowStatsReply reply, IOFSwitchBackend sw) {
+    public void handleFlowStatsReply_combineWithSwitchPorts(OFFlowStatsReply reply, IOFSwitchBackend aSwitch) {
 
-        OFSwitch fromSw, toSw = null;
-        OFPort inPort, outPort = null;
-        long byteCount, maxBand, currentBand = 0;
-        fromSw = toSw = (OFSwitch) sw;
+        IOFSwitch dstSwitch = aSwitch;
+        OFPort inPort = null; //inPort：匹配域中的端口，outPort：（没有流表冲突时）表示某链路的源端口（该交换机为该链路的源节点）--因此以inPort计更准确
+        long byteCount = 0;
         List<OFFlowStatsEntry> entries = reply.getEntries();
+        if(entries == null || entries.size()==0) {
+            MyLog.warn("handleFlowStatsReply_combineWithSwitchPorts error： 通量测量出错， 流状态响应流表为空");
+        }
         for (OFFlowStatsEntry e : entries) {
-            byteCount = e.getByteCount().getValue();
+            byteCount = e.getByteCount().getValue()/8; //除以8转化为字节（B）
             inPort = e.getMatch().get(MatchField.IN_PORT);
 
-            if (inPort == null) {//to controller
+            if (inPort == null || inPort == OFPort.ALL) {//to controller
                 //MyLog.info("inPort is null, WARN in handleFlowStatsReply module");
-                inPort = OFPort.ALL;
-            }
-            //得到outPort
-            List<OFInstruction> instruction = e.getInstructions();
-            for (OFInstruction i : instruction) {
-                if (i instanceof OFInstructionApplyActions) {
-                    List<OFAction> action = ((OFInstructionApplyActions) i).getActions();
-                    for (OFAction a : action) {
-                        if (a.getType() == OFActionType.OUTPUT) {
-                            outPort = ((OFActionOutput) a).getPort();
-                            break;
-                        }
-                    }
-                } else
-                    continue;
-            }
-            //默认的流表项不需要存储
-            if (inPort == OFPort.ALL || outPort.getPortNumber() < 1) {
                 continue;
             }
-            //构造链路信息对象
-            maxBand = calculateMaxBand(fromSw, toSw, inPort, outPort);
-            LinkDataInfo ldi = new LinkDataInfo();
-            ldi.setFromSw(fromSw);
-            ldi.setToSw(toSw);
-            ldi.setInPort(inPort);
-            ldi.setOutPort(outPort);
-            ldi.setMaxBand(maxBand);
-            ldi.setByteCount(byteCount);
-            //存储
-            storeLinkStatus(ldi);
+
+            if(byteCount<0)
+                MyLog.warn("handleFlowStatsReply_combineWithSwitchPorts error： 通量测量出错， byteCount<0");
+            String dstSwitchAndPort = aSwitch.getId().getLong()+":"+inPort.getPortNumber();
+            if(historyBytesOfLinks.containsKey(dstSwitchAndPort)) {
+                historyBytesOfLinks.put(dstSwitchAndPort, byteCount);
+                long through= byteCount - throughOfLinks.get(dstSwitchAndPort);
+                if(through<0)
+                    through =0;
+                //throughOfLinks.remove(dstSwitchAndPort);
+                throughOfLinks.put(dstSwitchAndPort, through);
+            } else {
+                historyBytesOfLinks.put(dstSwitchAndPort, byteCount);
+                throughOfLinks.put(dstSwitchAndPort, (long) 0);
+            }
+
+            //throughOfLinks.put(dstSwitchAndPort, byteCount);
+
+        }
+        for(String str :historyBytesOfLinks.keySet()) {
+            System.out.println("through------:"+str+" bytecount="+throughOfLinks.get(str));
         }
 
     }
@@ -332,6 +339,44 @@ public class NetworkStore {
         //TODO --计算流经该交换机的总包数
 
     }
+
+
+
+
+
+    public List<Map<Long, Map<String, Number>>> getAllFlowAllTimeOfSwitch() {
+        return allFlowAllTimeOfSwitch;
+    }
+
+    public List<Double> getQoSLists() {
+        return QoSLists;
+    }
+
+    public List<Double> getSecurityLists() {
+        return securityLists;
+    }
+
+    public Map<DatapathId, Long> getEchoReplyDelay() {
+        return echoReplyDelay;
+    }
+
+    public Map<String, Double> getDelayOfLinks() {
+        return delayOfLinks;
+    }
+
+    public Map<String, Double> getDroppedPacketsOfLinks() {
+        return droppedPacketsOfLinks;
+    }
+
+    public Map<String, Long> getThroughOfLinks() {
+        return throughOfLinks;
+    }
+
+
+
+
+
+    //以下为教程代码，本实验不使用
 
 
     /**
@@ -469,11 +514,6 @@ public class NetworkStore {
                 }
             }
 
-    }
-
-
-    public List<Map<Long, Map<String, Number>>> getAllFlowAllTimeOfSwitch() {
-        return allFlowAllTimeOfSwitch;
     }
 }
 

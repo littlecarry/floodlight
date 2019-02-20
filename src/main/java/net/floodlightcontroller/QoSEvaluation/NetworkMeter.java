@@ -52,7 +52,7 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
     @Override
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
         //System.out.println("模块可以监听到消息- In Recieve");
-        switch(msg.getType()){
+        switch(msg.getType()) {
             case PACKET_IN:
                 //bcStore:相当于队列
                 //所有收到的消息都会在controller.java中被打成以太帧存入bctore中，因此可以从bctore中取出二层帧
@@ -151,7 +151,7 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
      *
      * @param reply
      */
-    public static void handleFlowStatsReply(OFFlowStatsReply reply, IOFSwitchBackend sw){
+    public static void handleFlowStatsReply(OFFlowStatsReply reply, IOFSwitchBackend sw) {
         NetworkStore networkStore = NetworkStore.getInstance();
         networkStore.handleFlowStatsReply_combineWithSwitchPorts(reply, sw);
     }
