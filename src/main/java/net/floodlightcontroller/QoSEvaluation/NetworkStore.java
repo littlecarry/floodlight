@@ -5,6 +5,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 import net.floodlightcontroller.MyLog;
+import net.floodlightcontroller.core.IOFSwitch;
 import org.projectfloodlight.openflow.protocol.OFActionType;
 import org.projectfloodlight.openflow.protocol.OFEchoReply;
 import org.projectfloodlight.openflow.protocol.OFFlowStatsEntry;
@@ -44,13 +45,24 @@ public class NetworkStore {
     protected List<Double> QoSLists;
     protected List<Double> securityLists;
 
+    //时延
+    protected Map<DatapathId, Long> echoReplyDelay;
+    protected Map<String, Double> delayOfLinks;
+
+    //丢包
+    protected Map<String, Double> droppedPacketsOfLinks;
+
     public NetworkStore(){
         currentLinkStatus = new ArrayList<LinkDataInfo>();
         historyLinkStatus = new ArrayList<LinkDataInfo>();
         linkTimeStatus = new ArrayList<LinkTimeInfo>();
+
         allFlowAllTimeOfSwitch = new ArrayList<>();
         QoSLists = new ArrayList<>();
         securityLists = new ArrayList<>();
+        echoReplyDelay = new HashMap<>();
+        delayOfLinks = new HashMap<>();
+        droppedPacketsOfLinks = new HashMap<>();
     }
 
     /**
@@ -68,6 +80,7 @@ public class NetworkStore {
     }
 
     //packetin和echo消息结合测时延
+
     public void handlePacketIn(IPacket iPacket, ILinkDiscoveryService linkService) {
 
         IPv4 ip = (IPv4) iPacket;
@@ -95,40 +108,73 @@ public class NetworkStore {
         //找出对应链路（有且只有单向的一条）
         Map<Link, LinkInfo> links = linkService.getLinks();
         for (Link l : links.keySet()) {
-            if (l.getSrc().equals(DatapathId.of(mess[1])) &&
-                    l.getSrcPort().getPortNumber() == Integer.parseInt(mess[2]) &&
-                    l.getDst().equals(DatapathId.of(mess[3])) &&
-                    l.getDstPort().getPortNumber() == Integer.parseInt(mess[4])) {
-                LinkTimeInfo ltf = new LinkTimeInfo();
-                ltf.setL(l);
-                ltf.setAllTime(allTime); //
-                linkTimeStatus.add(ltf);
+
+            DatapathId aimedSrc = DatapathId.of(mess[1]);
+            int aimedSrcPort = Integer.parseInt(mess[2]);//也可以只使用链路的源交换机地址和端口号定位链路（mess[1]和mess[2]）
+            DatapathId aimedDst = DatapathId.of(mess[3]);
+            int aimedDstPort = Integer.parseInt(mess[4]);
+
+
+            if (l.getSrc().equals(aimedSrc) &&
+                    l.getSrcPort().getPortNumber() == aimedSrcPort &&
+                    l.getDst().equals(aimedDst) &&
+                    l.getDstPort().getPortNumber() == aimedDstPort) {
+
+                String key = aimedSrc.getLong()+":"+aimedSrcPort+":"+aimedDst.getLong()+":"+aimedDstPort; //linkInfo
+
+                long srcEchoReplyDelay = 0, dstEchoReplyDelay = 0;
+                if(echoReplyDelay.containsKey(aimedSrc)) {
+                    srcEchoReplyDelay = echoReplyDelay.get(aimedSrc);
+                }
+                if(echoReplyDelay.containsKey(aimedDst)) {
+                    dstEchoReplyDelay = echoReplyDelay.get(aimedDst);
+                }
+
+                if(allTime-srcEchoReplyDelay-dstEchoReplyDelay>0) {
+                    delayOfLinks.put(key, 0.0 + allTime-srcEchoReplyDelay-dstEchoReplyDelay);
+                } else {
+                    delayOfLinks.put(key, new Double(0));
+                    MyLog.warn("handlePacketIn Error: 所测时延小于0， 为" + (allTime-srcEchoReplyDelay-dstEchoReplyDelay));
+                }
                 break;
             }
 
         }
     }
 
+    /**
+     * echo响应消息处理--测量各个交换机与控制器的时延--时延测量
+     * @param reply
+     */
     public void handleEchoReply(OFEchoReply reply) {
 
         if (reply.getData().length <= 0)
             return;
         String[] data = new String(reply.getData()).split("<>");
-        if (data.length != 2) {
+        if (data.length != 2) { //当前时间和所属交换机
             MyLog.error("length is not 2!");
             return;
         }
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
         Date currentTime = new Date();
-        long Time = 0;
+        long time =0;
         try {
             Date sendTime = df.parse(data[0]);
-            Time = currentTime.getTime() - sendTime.getTime();
+            DatapathId switchId = DatapathId.of(data[1]);
+            time = (currentTime.getTime() - sendTime.getTime())/2; // 该节点到控制器的时延
+            if(time>0) {
+                echoReplyDelay.put(switchId, time);
+            } else { //考虑异常（时延<0）：异常时使用上一次时延，若不存在上一次时延令时延为0.
+                if(!echoReplyDelay.containsKey(switchId)) {
+                    echoReplyDelay.put(switchId, new Long(0));
+                }
+            }
+
         } catch (ParseException e) {
             e.printStackTrace();
         }
         //更新记录
-        for (LinkTimeInfo lti : linkTimeStatus) {
+       /* for (LinkTimeInfo lti : linkTimeStatus) {
             if (lti.getL().getSrc().equals(DatapathId.of(data[1])))
                 lti.setCtossw(Time / 2);
             if (lti.getL().getDst().equals(DatapathId.of(data[1])))
@@ -139,15 +185,13 @@ public class NetworkStore {
                 MyLog.info("时延：" + lti.getDelay()); //delay为最终的时延
             }
 
-        }
+        }*/
 
     }
 
 
-    //TODO
-    //端口消息测丢包率
+    //端口消息测丢包率--得到的是交换机所有端口的消息
     public void handlePortStatsReply(OFPortStatsReply reply, IOFSwitchBackend aSwitch) {
-
         List<OFPortStatsEntry> portStatsEntries = reply.getEntries();//得到消息体
         for (OFPortStatsEntry entry : portStatsEntries) {
             /**
@@ -155,10 +199,21 @@ public class NetworkStore {
              * entry.getTxDropped();
              * entry.getTxErrors();
              * */
-            entry.getTxPackets();//发送的包数目
-            entry.getTxDropped();//丢失的包数目 相除得到发送的丢包率
+            OFPort srcPort = entry.getPortNo();//可以对应
+            String key = aSwitch.getId().getLong() + ":" + srcPort.getPortNumber();
+            double droppedPercent;
+            if(entry.getTxPackets()!=null && entry.getTxDropped()!=null) {
+                droppedPercent = 1.0 * entry.getTxDropped().getValue() / entry.getTxPackets().getValue();
+            } else {
+                MyLog.error("NetworkStore-handlePortStatsReply Error: 丢包率测量出错，丢包或收到的包对象为null");
+                droppedPercent = 0;
+            }
+            droppedPacketsOfLinks.put(key, new Double(droppedPercent));
+
+          /*  entry.getTxPackets().getValue();//发送的包数目
+            entry.getTxDropped().getValue();//丢失的包数目 相除得到发送的丢包率
             entry.getRxPackets();
-            entry.getRxDropped();//相除得到接收的丢包率
+            entry.getRxDropped();//相除得到接收的丢包率*/
         }
     }
 

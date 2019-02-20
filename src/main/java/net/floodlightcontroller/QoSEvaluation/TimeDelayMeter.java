@@ -71,12 +71,13 @@ public class TimeDelayMeter {
         //MyLog.info("时延测量发起请求-测量完成");
     }
 
-    public void doTimeDelayMeterByLinks(IOFSwitch fromSw, IOFSwitch toSw, OFPort inPort, OFPort outPort) {
+    public void doTimeDelayMeterByLinks(IOFSwitch fromSw, IOFSwitch toSw, OFPort inPort, OFPort outPort) { //我们的实验与教程不同将PacketOut-PacketIn消息对处理与echo消息处理分开进行，
+                                                                                                        //减少echo请求和应答次数
             //时延 = （控制器到源交换机时间+控制器到目的交换机时间+交换机间时延）-控制器到源交换机时间-控制器到目的交换机时间
             //packetOut消息到echo的时间间隔为（控制器到源交换机时间+控制器到目的交换机时间+交换机间时延）。
             sendPacketOut(fromSw, inPort, toSw, outPort);
-            sendEchoRequest(fromSw);
-            sendEchoRequest(toSw);
+            //sendEchoRequest(fromSw);
+            //sendEchoRequest(toSw);
             //MyLog.info("时延测量发起请求----发送packetout与echo消息");
     }
 

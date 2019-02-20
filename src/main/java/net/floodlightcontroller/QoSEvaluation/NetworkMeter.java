@@ -23,6 +23,7 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
 
     //
     protected NetworkMeterThread networkMeterThread;
+    protected EchoRequestForTimeDelayThread echoRequestForTimeDelayThread;
     //交换机实例对象
     protected IOFSwitchService switchService;
     protected ILinkDiscoveryService linkService;
@@ -123,6 +124,7 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
         packetLossMeter =new PacketLossMeter();
         timeDelayMeter = new TimeDelayMeter();
         //初始化线程
+        echoRequestForTimeDelayThread = new EchoRequestForTimeDelayThread(this);
         networkMeterThread = new NetworkMeterThread(this);
     }
 
@@ -137,6 +139,7 @@ public class NetworkMeter implements IOFMessageListener, IFloodlightModule {
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 
         //启动线程
+        echoRequestForTimeDelayThread.start();
         networkMeterThread.start();
     }
 
