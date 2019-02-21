@@ -4,6 +4,7 @@ package net.floodlightcontroller.NodeSelection;
 import net.floodlightcontroller.Constant.BaseConstant;
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.MyUtils.MyUtils;
+import net.floodlightcontroller.QoSEvaluation.NetworkStore;
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFMessageListener;
@@ -30,6 +31,7 @@ import net.floodlightcontroller.AdaptiveParamers;
 public class NodeSelection implements IOFMessageListener, IFloodlightModule {
     protected IFloodlightProviderService floodlightProvider;
     protected static Logger logger;
+    protected NetworkStore ns;
 
     //交换机实例对象
     protected IOFSwitchService switchService;
@@ -90,6 +92,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         switchService = context.getServiceImpl(IOFSwitchService.class);
         linkService = context.getServiceImpl(ILinkDiscoveryService.class);
         utils = new MyUtils();
+        ns = NetworkStore.getInstance();
     }
 
     @Override
@@ -110,6 +113,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
 
         boolean isAbnormal = false;
         if (links != null && !links.isEmpty()) {
+            MyLog.info("nodeSelection info : doing node selection.");
             List<Link> blockedLinks = new ArrayList<>();
             List<IOFSwitch> existingSwitches = new ArrayList<>();
 
@@ -122,47 +126,52 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
             //List<SwitchOfDegree> curToSwitches =new ArrayList<>();
             Map<IOFSwitch, Integer> switchCounterMap = new HashMap<>();
             for (Link l : links.keySet()) {
-                IOFSwitch fromSw = this.getSwitchService().getSwitch(l.getSrc());
-                IOFSwitch toSw = this.getSwitchService().getSwitch(l.getDst());
-
+                IOFSwitch srcSwitch = this.getSwitchService().getSwitch(l.getSrc());
+                IOFSwitch dstSwitch = this.getSwitchService().getSwitch(l.getDst());
+                OFPort inPort = l.getSrcPort();
+                OFPort outPort = l.getDstPort();
+                String srcSwitchAndPortAndDstSwitchAndPort = srcSwitch.getId().getLong()+":"+inPort.getPortNumber()
+                        +":"+dstSwitch.getId().getLong()+":"+outPort.getPortNumber();
                 //
-                double s1 = AdaptiveParamers.SecurityOfNodes.get(fromSw);
-                double s2 = AdaptiveParamers.SecurityOfNodes.get(toSw);
-                double q = AdaptiveParamers.QoSOfLinks.get(l);//注意，该QoStoAbnormalThreshold是双向的，同一条链路的两向QoS不同
-                utils.mapCounter(switchCounterMap, fromSw, 0);
-                utils.mapCounter(switchCounterMap, toSw, 0);
+                /*double s1 = AdaptiveParamers.SecurityOfNodes.get(fromSw); //事实上需要每个节点一个安全值
+                double s2 = AdaptiveParamers.SecurityOfNodes.get(toSw);*/
+                double s1 = ns.getSecurity(); //目前安全性取值为固定值
+                double s2 = ns.getSecurity();
+                double q = ns.getQosOfLinks().get(srcSwitchAndPortAndDstSwitchAndPort);//注意，该QosToAbnormalThreshold是双向的，同一条链路的两向QoS不同
+                utils.mapCounter(switchCounterMap, srcSwitch, 1); //+1 一个节点的入度和出度其实是相同的，因为对于同一条链路每个节点既是入度节点又是出度节点
+                utils.mapCounter(switchCounterMap, dstSwitch, 1);
                 if (Math.sqrt(s1 * s2) * BaseConstant.toAbnormalThreshold < q) {//此处为Abnormal状态；正常模式什么也不做
                     isAbnormal = true;
                     blockedLinks.add(l);
-                    //出入节点对应关系
-                    if (inToOutSwitchMapping.isEmpty() || !inToOutSwitchMapping.containsKey(fromSw)) {
+                    //出入节点对应关系-每个入节点对应的出节点的集合（映射）
+                    if (inToOutSwitchMapping.isEmpty() || !inToOutSwitchMapping.containsKey(srcSwitch)) {
                         List<IOFSwitch> list = new ArrayList<>();
-                        list.add(toSw);
-                        inToOutSwitchMapping.put(fromSw, list);
+                        list.add(dstSwitch);
+                        inToOutSwitchMapping.put(srcSwitch, list);
                     } else {
-                        List<IOFSwitch> list = inToOutSwitchMapping.get(fromSw);
-                        list.add(toSw);//允许重复，重复n次为n度
-                        inToOutSwitchMapping.put(fromSw, list);
+                        List<IOFSwitch> list = inToOutSwitchMapping.get(srcSwitch);
+                        list.add(dstSwitch);//允许重复，重复n次为n度
+                        inToOutSwitchMapping.put(srcSwitch, list);
                     }
                     //节点出入度表
                     if (switchMap.isEmpty()) {
-                        switchMap.put(fromSw, new SwitchOfDegree(fromSw, 0, 1));
-                        switchMap.put(toSw, new SwitchOfDegree(toSw, 1, 0));
+                        switchMap.put(srcSwitch, new SwitchOfDegree(srcSwitch, 0, 1));
+                        switchMap.put(dstSwitch, new SwitchOfDegree(dstSwitch, 1, 0));
                     } else {
 
-                        if (switchMap.containsKey(fromSw)) {
-                            SwitchOfDegree sw = switchMap.get(fromSw);
+                        if (switchMap.containsKey(srcSwitch)) {
+                            SwitchOfDegree sw = switchMap.get(srcSwitch);
                             sw.outDegree++;
-                            switchMap.put(fromSw, sw);
+                            switchMap.put(srcSwitch, sw);
                         } else {
-                            switchMap.put(fromSw, new SwitchOfDegree(fromSw, 0, 1));
+                            switchMap.put(srcSwitch, new SwitchOfDegree(srcSwitch, 0, 1));
                         }
-                        if (switchMap.containsKey(toSw)) {
-                            SwitchOfDegree sw = switchMap.get(toSw);
+                        if (switchMap.containsKey(dstSwitch)) {
+                            SwitchOfDegree sw = switchMap.get(dstSwitch);
                             sw.inDegree++;
-                            switchMap.put(toSw, sw);
+                            switchMap.put(dstSwitch, sw);
                         } else {
-                            switchMap.put(toSw, new SwitchOfDegree(toSw, 1, 0));
+                            switchMap.put(dstSwitch, new SwitchOfDegree(dstSwitch, 1, 0));
                         }
                     }
 
@@ -172,7 +181,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
 
 
             if (isAbnormal) {
-                List<SwitchOfDegree> switchList = new ArrayList<>(switchMap.values());
+                List<SwitchOfDegree> switchList = new ArrayList<>(switchMap.values()); //得到所有交换机的SwitchOfDegree对象
                 Set<IOFSwitch> resultSet = new HashSet<>();
                 if (switchList.isEmpty()) {
                     MyLog.error("Abnormal Pattern in Node Selection, but switchList is null");
@@ -198,18 +207,11 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                             if (isSourceBlockedNode) {
                                 resultSet.add(sw);
                             }
-
                             if (inToOutSwitchMapping.containsKey(sw)) {
-                                List<IOFSwitch> list = inToOutSwitchMapping.get(sw);
-                                for (IOFSwitch iofSwitch : list) {
-                                    if (switchMap.containsKey(iofSwitch) && switchMap.get(iofSwitch).inDegree > 0) {//保证操作是正确的，非源节点（汇聚节点）可能导致操作异常
-                                        SwitchOfDegree switchOfDegree = switchMap.get(iofSwitch);
-                                        switchOfDegree.inDegree--;
-                                        switchMap.put(iofSwitch, switchOfDegree);
-                                    }
-                                }
+                                indegreeAdjust(sw, inToOutSwitchMapping, switchMap); //switchMap中一定包含sw。理论上inToOutSwitchMapping中也一定包含sw
+                            } else {
+                                MyLog.error("Abnormal Pattern in Node Selection: sw is not contained in inToOutSwitchMapping.");
                             }
-                            switchMap.remove(sw);
                         }
 
                         if (!resultSet.isEmpty()) {
@@ -235,18 +237,16 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                         if (maxSw != null) {
                             switchCounterMap.remove(maxSw);
                             resultSet.add(maxSw);
-                            List<IOFSwitch> list = inToOutSwitchMapping.get(maxSw);
-                            for (IOFSwitch iofSwitch : list) {
-                                if (switchMap.containsKey(iofSwitch) && switchMap.get(iofSwitch).inDegree > 0) {//保证操作是正确的，非源节点（汇聚节点）可能导致操作异常
-                                    SwitchOfDegree switchOfDegree = switchMap.get(iofSwitch);
-                                    switchOfDegree.inDegree--;
-                                    switchMap.put(iofSwitch, switchOfDegree);
-                                }
-                            }
-                            switchMap.remove(maxSw);
+                            indegreeAdjust(maxSw, inToOutSwitchMapping, switchMap);
                         } else {
                             MyLog.warn("error to find 汇聚节点");
                         }
+
+                        if (!resultSet.isEmpty()) { //可能存在源节点即是环的拓扑
+                            isSourceBlockedNode = false;
+                        }
+                        Collections.sort(switchList, new switchComparator());
+                        firstSwitch = switchList.get(0); //得到入度最小的节点
                     }
                 }
 
@@ -258,7 +258,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                     MyLog.error("There are some mistakes in Node Selection sothat cannot find the result");
                 }
 
-            } else {
+            } else { //normal模式
                 //找到中枢节点
                 AdaptiveParamers.coreSwitches.clear();
                 for (IOFSwitch sw : switchCounterMap.keySet()) {
@@ -275,6 +275,25 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
 
 
         return AdaptiveParamers.coreSwitches;
+    }
+
+    /**
+     *
+     * 删除节点并修改相关节点的入度（其实对于中枢节点，其相关节点的出度也需要修改，但是本实验只关心入度）
+     * @param sw
+     * @param inToOutSwitchMapping
+     * @param switchMap
+     */
+    void indegreeAdjust(IOFSwitch sw, Map<IOFSwitch, List<IOFSwitch>> inToOutSwitchMapping,  Map<IOFSwitch, SwitchOfDegree> switchMap) {
+        List<IOFSwitch> list = inToOutSwitchMapping.get(sw);
+        for (IOFSwitch iofSwitch : list) {
+            if (switchMap.containsKey(iofSwitch) && switchMap.get(iofSwitch).inDegree > 0) {//保证操作是正确的，非源节点（汇聚节点）可能导致操作异常
+                SwitchOfDegree switchOfDegree = switchMap.get(iofSwitch);
+                switchOfDegree.inDegree--;
+                switchMap.put(iofSwitch, switchOfDegree);
+            }
+        }
+        switchMap.remove(sw);
     }
 
 
@@ -334,7 +353,6 @@ class SwitchOfDegree {
 
 
 class switchComparator implements Comparator<SwitchOfDegree> {
-
     @Override
     public int compare(SwitchOfDegree o1, SwitchOfDegree o2) {//按入度排序
         if(o1.inDegree>o2.inDegree)

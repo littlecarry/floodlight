@@ -35,15 +35,15 @@ import net.floodlightcontroller.packet.IPv4;
 public class NetworkStore {
     protected static NetworkStore ns;
     //现在----历史
-    protected  List<LinkDataInfo> currentLinkStatus;
+    /*protected  List<LinkDataInfo> currentLinkStatus;
     protected List<LinkDataInfo> historyLinkStatus;
-    protected List<LinkTimeInfo> linkTimeStatus;
+    protected List<LinkTimeInfo> linkTimeStatus;*/
     //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
-    protected  List<Map<Long, Map<String, Number>>> allFlowAllTimeOfSwitch;
+    protected  List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
     protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
 
-    protected List<Double> QoSLists;
-    protected List<Double> securityLists;
+    protected Map<String, Double> QosOfLinks; //瞬时的
+    protected Map<String, Double> SecurityOfNodes; //瞬时的节点安全性
 
     //时延
     protected Map<DatapathId, Long> echoReplyDelay;
@@ -57,14 +57,18 @@ public class NetworkStore {
     protected Map<String, Long> historyBytesOfLinks; //key是dstSwitchAndPort
 
 
+    //安全值for所有节点
+    protected double security = 0.8;
+
+
     public NetworkStore(){
-        currentLinkStatus = new ArrayList<LinkDataInfo>();
+        /*currentLinkStatus = new ArrayList<LinkDataInfo>();
         historyLinkStatus = new ArrayList<LinkDataInfo>();
-        linkTimeStatus = new ArrayList<LinkTimeInfo>();
+        linkTimeStatus = new ArrayList<LinkTimeInfo>();*/
 
         allFlowAllTimeOfSwitch = new ArrayList<>();
-        QoSLists = new ArrayList<>();
-        securityLists = new ArrayList<>();
+        QosOfLinks = new HashMap<>();
+        SecurityOfNodes = new HashMap<>();
         echoReplyDelay = new HashMap<>();
         delayOfLinks = new HashMap<>();
         droppedPacketsOfLinks = new HashMap<>();
@@ -291,25 +295,25 @@ public class NetworkStore {
      * @param reply
      * @param sw
      */
-    public void handleFlowStatsReply_combineWithIPAndPorts(OFFlowStatsReply reply, IOFSwitchBackend sw) {
+    public void handleFlowStatsReply_combineWithIPAndPorts(OFFlowStatsReply reply, IOFSwitchBackend sw) { //对非网络包无效，因为统计的是IP地址
 
-        long byteCount;
+        long packetCount;
         //String srcAndDst = null;
-        long srcAndDst = 0;
+        String srcAndDst;
         IPv4Address dstAdd,srcAdd;
         OFPort inPort,outPort=null;
 
         List<OFFlowStatsEntry> entries = reply.getEntries();
-        Map<Long, Map<String, Number>> flowsThisTerm = new HashMap<>();
+        Map<String, Map<String, Number>> flowsThisTerm = new HashMap<>();
         long time = new Date().getTime();
 
         for (OFFlowStatsEntry e :entries) {
-            byteCount = e.getByteCount().getValue();//TODO 这里需要求的是包数目
+            packetCount = e.getPacketCount().getValue();
             dstAdd =e.getMatch().get(MatchField.IPV4_DST);
             srcAdd = e.getMatch().get(MatchField.IPV4_SRC);
             inPort =e.getMatch().get(MatchField.IN_PORT);
             //srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt(); //键（key）用字符串形式实现，与long效果上一样，类型不一样
-            srcAndDst = (srcAdd.getInt()<<16)+dstAdd.getInt();
+            srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt();
 
             if(inPort==null || inPort ==OFPort.ALL) {
                 continue;
@@ -318,7 +322,7 @@ public class NetworkStore {
             if(flowsThisTerm.containsKey(srcAndDst)) {
                 Map<String, Number> enums = flowsThisTerm.get(srcAndDst);
                 int count = (int) enums.get("count");
-                enums.put("count", count+byteCount);//TODO 这里为包数目，而不应该加比特数
+                enums.put("count", count + packetCount);
                 flowsThisTerm.put(srcAndDst, enums);
             } else {
                 Map<String, Number> enums = new HashMap<>();
@@ -344,16 +348,16 @@ public class NetworkStore {
 
 
 
-    public List<Map<Long, Map<String, Number>>> getAllFlowAllTimeOfSwitch() {
+    public List<Map<String, Map<String, Number>>> getAllFlowAllTimeOfSwitch() {
         return allFlowAllTimeOfSwitch;
     }
 
-    public List<Double> getQoSLists() {
-        return QoSLists;
+    public Map<String, Double> getQosOfLinks() {
+        return QosOfLinks;
     }
 
-    public List<Double> getSecurityLists() {
-        return securityLists;
+    public Map<String, Double> getSecurityOfNodes() {
+        return SecurityOfNodes;
     }
 
     public Map<DatapathId, Long> getEchoReplyDelay() {
@@ -372,11 +376,15 @@ public class NetworkStore {
         return throughOfLinks;
     }
 
+    public double getSecurity() {
+        return security;
+    }
 
 
 
 
-    //以下为教程代码，本实验不使用
+
+//以下为教程代码，本实验不使用
 
 
     /**
@@ -389,7 +397,7 @@ public class NetworkStore {
     /**
      * 该方法最后给出了每条链路的出入交换机及对应端口号，以及流经比特数（求当前带宽），最大带宽
      */
-    public void handleFlowStatsReply2(OFFlowStatsReply reply, IOFSwitchBackend sw) {
+    /*public void handleFlowStatsReply2(OFFlowStatsReply reply, IOFSwitchBackend sw) {
 
         OFSwitch fromSw, toSw = null;
         OFPort inPort, outPort = null;
@@ -435,9 +443,9 @@ public class NetworkStore {
             storeLinkStatus(ldi);
         }
 
-    }
+    }*/
 
-    //存储
+   /* //存储
     public void storeLinkStatus(LinkDataInfo ldi) {
 
         if (currentLinkStatus == null) {
@@ -473,7 +481,7 @@ public class NetworkStore {
         }
         currentLinkStatus.clear();
         linkTimeStatus.clear();
-    }
+    }*/
 
     //计算链路的最大带宽---入口带宽与出口带宽的最小值
     public long calculateMaxBand(OFSwitch fromSw, OFSwitch toSw, OFPort inPort, OFPort outPort) {
@@ -500,7 +508,7 @@ public class NetworkStore {
         return (fromBand >= toBand ? toBand : fromBand);
     }
 
-    //计算当前带宽，输出
+    /*//计算当前带宽，输出
     public void calCurrentBand() {
         for(LinkDataInfo h:historyLinkStatus)
             for (LinkDataInfo c : currentLinkStatus) {
@@ -514,7 +522,7 @@ public class NetworkStore {
                 }
             }
 
-    }
+    }*/
 }
 
 class LinkDataInfo {

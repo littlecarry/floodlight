@@ -16,7 +16,7 @@ public interface AdaptiveParamers {
     Map<IOFSwitch, Double> QoSOfNodes =new HashMap<>();
     //所有链路安全性，QoS
     Map<Link, Double> SecurityOfLinks = new HashMap<>();
-    Map<Link, Double> QoSOfLinks =new HashMap<>();
+    Map<Link, Double> QosOfLinks =new HashMap<>();
 
 
 
