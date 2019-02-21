@@ -29,17 +29,16 @@ public class QosEvaluation {
 
     static final double s = 1;
 
-    QosEvaluation() {
+    QosEvaluation(NetworkMeter networkMeter) {
         ns = NetworkStore.getInstance();
-        networkMeter = new NetworkMeter();
+        this.networkMeter = networkMeter;
         QosEvaluation = ns.getQosOfLinks();
 
     }
 
     void calQosEvaluation() {
-
         Map<Link, LinkInfo> links = networkMeter.getLinkService().getLinks();
-        if(links.isEmpty() || links.size()==0) {
+        if(links==null || links.isEmpty()) {
             MyLog.warn("calQosEvaluation-QosEvaluation error: links not found.");
             return;
         }
@@ -66,6 +65,9 @@ public class QosEvaluation {
             qos = FACTORS[0]*delay+FACTORS[1]*through+FACTORS[2]*droppedPackets;
             QosEvaluation.put(srcSwitchAndPortAndDstSwitchAndPort, qos);
         }
+        /*for(String key :QosEvaluation.keySet()) {
+            System.out.println("-----QosEvaluation------ Link:"+key+";QoS value="+ QosEvaluation.get(key));
+        }*/
 
     }
 
@@ -79,10 +81,10 @@ public class QosEvaluation {
      */
     <T extends Number> double calSubEvaluation (Map<String, T> map, String key, int i)  { //i=0,1,2 分别代表delay,through,droppedPackets.
         double val ;
-        if(map.containsKey(key)) {
-            val = (double) map.get(key);
-        } else {
+        if(map==null||map.isEmpty()||!map.containsKey(key)) {
             val = 0.0;
+        } else {
+            val = map.get(key).doubleValue();
         }
 
         if(val<LOW_THRESHOLDS[i]) { //最佳

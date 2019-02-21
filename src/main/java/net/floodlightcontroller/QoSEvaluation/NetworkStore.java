@@ -143,10 +143,11 @@ public class NetworkStore {
 
                 if(allTime-srcEchoReplyDelay-dstEchoReplyDelay>0) {
                     delayOfLinks.put(key, 0.0 + allTime-srcEchoReplyDelay-dstEchoReplyDelay);
+                    //System.out.println("delay------:"+(0.0 + allTime-srcEchoReplyDelay-dstEchoReplyDelay));
                 } else {
                     delayOfLinks.put(key, new Double(0));
-                    MyLog.warn("handlePacketIn Error: 所测时延小于0， 为" + allTime+" "+srcEchoReplyDelay+" "+
-                            dstEchoReplyDelay+" "+(allTime-srcEchoReplyDelay-dstEchoReplyDelay));
+                   /* MyLog.warn("handlePacketIn Error: 所测时延小于0， 为" + allTime+" "+srcEchoReplyDelay+" "+
+                            dstEchoReplyDelay+" "+(allTime-srcEchoReplyDelay-dstEchoReplyDelay));*/
                 }
                 break;
             }
@@ -175,14 +176,14 @@ public class NetworkStore {
             DatapathId switchId = DatapathId.of(data[1]);
             time = (currentTime.getTime() - sendTime.getTime())/2; // 该节点到控制器的时延
             if(time>0) {
-                System.out.println("delay------:"+time);
+                //System.out.println("echo------:"+time);
                 echoReplyDelay.put(switchId, time);
             } else { //考虑异常（时延<0）：异常时使用上一次时延，若不存在上一次时延令时延为0.
                 if(!echoReplyDelay.containsKey(switchId)) {
                     echoReplyDelay.put(switchId, new Long(0));
-                    System.out.println("delay------:"+0);
+                    //System.out.println("echo------:"+0);
                 } else {
-                    System.out.println("delay------:"+echoReplyDelay.get(switchId));
+                    //System.out.println("echo------:"+echoReplyDelay.get(switchId));
                 }
             }
 
@@ -224,7 +225,7 @@ public class NetworkStore {
                 MyLog.error("NetworkStore-handlePortStatsReply Error: 丢包率测量出错，丢包或收到的包对象为null");
                 droppedPercent = 0;
             }
-            System.out.println("droppedPackets------:"+droppedPercent);
+            //System.out.println("droppedPackets------:"+droppedPercent);
             droppedPacketsOfLinks.put(key, new Double(droppedPercent));
 
           /*  entry.getTxPackets().getValue();//发送的包数目
@@ -281,9 +282,9 @@ public class NetworkStore {
             //throughOfLinks.put(dstSwitchAndPort, byteCount);
 
         }
-        for(String str :historyBytesOfLinks.keySet()) {
+        /*for(String str :historyBytesOfLinks.keySet()) {
             System.out.println("through------:"+str+" bytecount="+throughOfLinks.get(str));
-        }
+        }*/
 
     }
 

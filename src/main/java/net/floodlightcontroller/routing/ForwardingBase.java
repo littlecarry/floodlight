@@ -45,7 +45,6 @@ import org.projectfloodlight.openflow.types.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.floodlightcontroller.sampling.PacketInSampling;
-import net.floodlightcontroller.Constant.BaseConstant;
 
 
 
@@ -92,7 +91,6 @@ public abstract class ForwardingBase implements IOFMessageListener {
     protected ILinkDiscoveryService linkService;
     protected IRestApiService restApiService;
     protected PacketInSampling packetInSampling;
-    protected BaseConstant baseConstant;
 
 
     // flow-mod - for use in the cookie

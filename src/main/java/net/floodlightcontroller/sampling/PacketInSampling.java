@@ -14,7 +14,7 @@ public class PacketInSampling {
     static double initP = 0.01;
     static int packetCounter = 0;
     protected List<Map<String, Number>> sampledPackets = new ArrayList<>();
-    private List<Map<Long, Map<String, Number>>> allFlowAllTimeOfSwitch;
+    private List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
 
     //inFlowSampling params
     static final double INCREASE_FACTOR = 1.2;
@@ -31,21 +31,21 @@ public class PacketInSampling {
         allFlowAllTimeOfSwitch = ns.getAllFlowAllTimeOfSwitch();
         int lengthOfTimes = allFlowAllTimeOfSwitch.size();
 
-        Map<Long, Map<String, Number>> curFlows = ns.getAllFlowAllTimeOfSwitch().get(lengthOfTimes-1);
-        Map<Long, Map<String, Number>> lastFlows = null;
+        Map<String, Map<String, Number>> curFlows = ns.getAllFlowAllTimeOfSwitch().get(lengthOfTimes-1);
+        Map<String, Map<String, Number>> lastFlows = null;
         if(lengthOfTimes>=2) {
             lastFlows =ns.getAllFlowAllTimeOfSwitch().get(lengthOfTimes-2);
         } else {
             lastFlows = new HashMap<>();
         }
 
-        HashMap<Long, Map<String, Number>>  newFlows = new HashMap<>(); //新流，首次进入的流
-        HashMap<Long, Map<String, Number>>  disFlows = new HashMap<>(); //旧流，取流差值
+        HashMap<String, Map<String, Number>>  newFlows = new HashMap<>(); //新流，首次进入的流
+        HashMap<String, Map<String, Number>>  disFlows = new HashMap<>(); //旧流，取流差值
 
         if(lastFlows == null || lastFlows.isEmpty()) {
             newFlows.putAll(curFlows);
         } else {
-            for(long srcAndDst : curFlows.keySet()) {
+            for(String srcAndDst : curFlows.keySet()) {
                 HashMap<String, Number> flow = new HashMap<>();
                 flow.putAll(lastFlows.get(srcAndDst)); //HashMap的声明，深拷贝
                 if(!lastFlows.containsKey(srcAndDst)) {
@@ -153,13 +153,13 @@ public class PacketInSampling {
     }
 
 
-    void flowCompression(Map<Long, Map<String, Number>> disFlows, Map<Long, Map<String, Number>> originalFlows) {
+    void flowCompression(Map<String, Map<String, Number>> disFlows, Map<String, Map<String, Number>> originalFlows) {
                                                                     //流内压缩/采样 disFlows中的流信息全部存在于历史的流内，
                                                                     // disFlows代表（当前与历史流中都存在的流）之间的差值
         if(disFlows==null||disFlows.size()==0) {
             return;
         }
-        for(long srcAndDst : disFlows.keySet()) {
+        for(String srcAndDst : disFlows.keySet()) {
             Map<String, Number> flow =disFlows.get(srcAndDst);
             int inFlowCount = (int) flow.get("inFlowCount");
             int lastN = (int) flow.get("lastN");
@@ -209,13 +209,13 @@ public class PacketInSampling {
 
     }
 
-    void newFlowSampling(Map<Long, Map<String, Number>> newFlows, Map<Long, Map<String, Number>> originalFlows) { //新采样模式每个流最多只能采集一个包，并最多被计数一次 ---经过该函数的包最终未都被采样
+    void newFlowSampling(Map<String, Map<String, Number>> newFlows, Map<String, Map<String, Number>> originalFlows) { //新采样模式每个流最多只能采集一个包，并最多被计数一次 ---经过该函数的包最终未都被采样
 
         if(newFlows==null||newFlows.size()==0) {
             return;
         }
         int threshold = (int) (1/pLists.get(pLists.size()-1));
-        for(long srcAndDst : newFlows.keySet()) {
+        for(String srcAndDst : newFlows.keySet()) {
             Map<String, Number> flow = newFlows.get(srcAndDst);
             int numberOfPackets = (int) flow.get("count");
             if(numberOfPackets-packetCounter>=threshold) {

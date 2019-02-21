@@ -1,7 +1,5 @@
 package net.floodlightcontroller.NodeSelection;
 
-
-import net.floodlightcontroller.Constant.BaseConstant;
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.MyUtils.MyUtils;
 import net.floodlightcontroller.QoSEvaluation.NetworkStore;
@@ -37,14 +35,25 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
     protected IOFSwitchService switchService;
     protected ILinkDiscoveryService linkService;
 
+    protected Set<IOFSwitch> coreSwitches;
+
 
     //工具实例
     protected MyUtils utils;
 
+    /*节点选择*/
+    //正常采样阈值k：S--k*Q(
+    public static final double toAbnormalThreshold= 1.0;
+    public static final double leastLinksForCoreNodes= 4;
+
+
+    //线程
+    NodeSelectionThread nodeSelectionThread;
+
     @Override
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
-        //TODO
-        System.out.println("---------------packetIn------"+this.getClass().getSimpleName());
+
+        //System.out.println("---------------packetIn------"+this.getClass().getSimpleName());
         return net.floodlightcontroller.core.IListener.Command.CONTINUE;
     }
 
@@ -56,8 +65,8 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
     @Override
     public boolean isCallbackOrderingPrereq(OFType type, String name) {
         //TODO
-        //return name.equals("devicemanager");
-        return false;
+        return name.equals("devicemanager");
+        //return false;
     }
 
     @Override
@@ -93,6 +102,8 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         linkService = context.getServiceImpl(ILinkDiscoveryService.class);
         utils = new MyUtils();
         ns = NetworkStore.getInstance();
+        coreSwitches = new HashSet<>();
+        nodeSelectionThread = new NodeSelectionThread(this);
     }
 
     @Override
@@ -100,8 +111,8 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         //添加监听器，监听packet_in消息
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 
-        //节点选择
-        Set<IOFSwitch> switches = this.nodeSelection();
+        nodeSelectionThread.start();
+
 
     }
 
@@ -140,7 +151,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                 double q = ns.getQosOfLinks().get(srcSwitchAndPortAndDstSwitchAndPort);//注意，该QosToAbnormalThreshold是双向的，同一条链路的两向QoS不同
                 utils.mapCounter(switchCounterMap, srcSwitch, 1); //+1 一个节点的入度和出度其实是相同的，因为对于同一条链路每个节点既是入度节点又是出度节点
                 utils.mapCounter(switchCounterMap, dstSwitch, 1);
-                if (Math.sqrt(s1 * s2) * BaseConstant.toAbnormalThreshold < q) {//此处为Abnormal状态；正常模式什么也不做
+                if (Math.sqrt(s1 * s2) * toAbnormalThreshold > q) {//此处为Abnormal状态；正常模式什么也不做
                     isAbnormal = true;
                     blockedLinks.add(l);
                     //出入节点对应关系-每个入节点对应的出节点的集合（映射）
@@ -178,14 +189,18 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                 }
 
             }
-
+            //System.out.println("----switchCounterMap----"+switchCounterMap.values());
 
             if (isAbnormal) {
                 List<SwitchOfDegree> switchList = new ArrayList<>(switchMap.values()); //得到所有交换机的SwitchOfDegree对象
+                /*for(SwitchOfDegree s : switchList) {
+                    System.out.println("----blockedNode----"+s.iofSwitch.getId()+" inDegree="+s.inDegree+" outDegree="+s.outDegree);
+                }*/
+                //System.out.println("---------------------1234567890");
                 Set<IOFSwitch> resultSet = new HashSet<>();
                 if (switchList.isEmpty()) {
                     MyLog.error("Abnormal Pattern in Node Selection, but switchList is null");
-                    return AdaptiveParamers.coreSwitches;
+                    return coreSwitches;
                 }
                 Collections.sort(switchList, new switchComparator());
                 SwitchOfDegree firstSwitch = switchList.get(0); //得到入度最小的节点
@@ -220,9 +235,9 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                         Collections.sort(switchList, new switchComparator());
                         if (switchList.isEmpty()) {
                             //MyLog.warn("Abnormal Pattern in Node Selection, but switchList is null After several loops");
-                            AdaptiveParamers.coreSwitches.clear();
-                            AdaptiveParamers.coreSwitches.addAll(resultSet);
-                            return AdaptiveParamers.coreSwitches;
+                            coreSwitches.clear();
+                            coreSwitches.addAll(resultSet);
+                            return coreSwitches;
                         }
                         firstSwitch = switchList.get(0); //得到入度最小的节点
                     } else { ////非空存在环
@@ -234,12 +249,15 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                                 maxVal = switchCounterMap.get(sw);
                             }
                         }
+                        //System.out.println("maxSw="+maxSw);
                         if (maxSw != null) {
                             switchCounterMap.remove(maxSw);
                             resultSet.add(maxSw);
                             indegreeAdjust(maxSw, inToOutSwitchMapping, switchMap);
                         } else {
-                            MyLog.warn("error to find 汇聚节点");
+                            if(isSourceBlockedNode)
+                                MyLog.warn("error to find 汇聚节点");
+                            break;
                         }
 
                         if (!resultSet.isEmpty()) { //可能存在源节点即是环的拓扑
@@ -251,22 +269,22 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                 }
 
                 if (switchMap.isEmpty()) {
-                    AdaptiveParamers.coreSwitches.clear();
-                    AdaptiveParamers.coreSwitches.addAll(resultSet);
-                    return AdaptiveParamers.coreSwitches;
+                    coreSwitches.clear();
+                    coreSwitches.addAll(resultSet);
+                    return coreSwitches;
                 } else {
                     MyLog.error("There are some mistakes in Node Selection sothat cannot find the result");
                 }
 
             } else { //normal模式
                 //找到中枢节点
-                AdaptiveParamers.coreSwitches.clear();
+                coreSwitches.clear();
                 for (IOFSwitch sw : switchCounterMap.keySet()) {
-                    if (switchCounterMap.get(sw) >= 6) {//每条边计数两次，其实为3
-                        AdaptiveParamers.coreSwitches.add(sw);
+                    if (switchCounterMap.get(sw) >= 2*leastLinksForCoreNodes) {//每条边计数两次，其实为3
+                        coreSwitches.add(sw);
                     }
                 }
-                return AdaptiveParamers.coreSwitches;
+                return coreSwitches;
             }
 
         } else {
@@ -274,7 +292,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         }
 
 
-        return AdaptiveParamers.coreSwitches;
+        return coreSwitches;
     }
 
     /**
