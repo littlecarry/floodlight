@@ -1,0 +1,13 @@
+
+
+CREATE TABLE
+    tbl_user_info
+    (
+        id INT NOT NULL AUTO_INCREMENT,
+        user_name VARCHAR(20) NOT NULL,
+        age INT NOT NULL,
+        sex INT(1) NOT NULL,
+        create_dt DATE NOT NULL,
+        PRIMARY KEY (id)
+    )
+    ENGINE=InnoDB DEFAULT CHARSET=utf8;

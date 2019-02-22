@@ -29,9 +29,9 @@ public class NodeSelectionThread extends Thread {
                 Set<IOFSwitch> switches = nodeSelection.nodeSelection();
                 //System.out.println("----NodeSelection----:   12345");
 
-                for(IOFSwitch iofSwitch : switches) {
+                /*for(IOFSwitch iofSwitch : switches) {
                     System.out.println("----NodeSelection----:"+iofSwitch.getId().getLong()+"   in the turn "+(i++));
-                }
+                }*/
             } catch (Exception e) {
                 e.printStackTrace();
                 MyLog.warn("qosEvaluation-NormalActionThread error");

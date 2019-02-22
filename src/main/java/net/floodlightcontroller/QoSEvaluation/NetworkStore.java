@@ -6,22 +6,14 @@ import java.util.*;
 
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.core.IOFSwitch;
-import org.projectfloodlight.openflow.protocol.OFActionType;
-import org.projectfloodlight.openflow.protocol.OFEchoReply;
-import org.projectfloodlight.openflow.protocol.OFFlowStatsEntry;
-import org.projectfloodlight.openflow.protocol.OFFlowStatsReply;
-import org.projectfloodlight.openflow.protocol.OFPortDesc;
-import org.projectfloodlight.openflow.protocol.OFPortFeatures;
-import org.projectfloodlight.openflow.protocol.OFPortStatsEntry;
-import org.projectfloodlight.openflow.protocol.OFPortStatsReply;
+import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstruction;
 import org.projectfloodlight.openflow.protocol.instruction.OFInstructionApplyActions;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
-import org.projectfloodlight.openflow.types.DatapathId;
-import org.projectfloodlight.openflow.types.IPv4Address;
-import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.protocol.stat.StatField;
+import org.projectfloodlight.openflow.types.*;
 
 import net.floodlightcontroller.core.IOFSwitchBackend;
 import net.floodlightcontroller.core.internal.OFSwitch;
@@ -39,7 +31,7 @@ public class NetworkStore {
     protected List<LinkDataInfo> historyLinkStatus;
     protected List<LinkTimeInfo> linkTimeStatus;*/
     //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
-    protected  List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
+    protected  List<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
     protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
 
     protected Map<String, Double> QosOfLinks; //瞬时的
@@ -257,6 +249,9 @@ public class NetworkStore {
         }
         for (OFFlowStatsEntry e : entries) {
             byteCount = e.getByteCount().getValue()/8; //除以8转化为字节（B）
+
+            //Iterator<StatField<?>> kk = e.getStats().getStatFields().iterator();
+
             inPort = e.getMatch().get(MatchField.IN_PORT);
 
             if (inPort == null || inPort == OFPort.ALL) {//to controller
@@ -299,49 +294,157 @@ public class NetworkStore {
     public void handleFlowStatsReply_combineWithIPAndPorts(OFFlowStatsReply reply, IOFSwitchBackend sw) { //对非网络包无效，因为统计的是IP地址
 
         long packetCount;
+        long byteCount;
         //String srcAndDst = null;
         String srcAndDst;
         IPv4Address dstAdd,srcAdd;
+        PacketType type;
+        MacAddress srcMac, dstMac;
         OFPort inPort,outPort=null;
+        String typeName;
 
-        List<OFFlowStatsEntry> entries = reply.getEntries();
-        Map<String, Map<String, Number>> flowsThisTerm = new HashMap<>();
+        Map<String, Map<String, Object>> flowsThisTerm = new HashMap<>();
         long time = new Date().getTime();
 
-        for (OFFlowStatsEntry e :entries) {
-            packetCount = e.getPacketCount().getValue();
-            dstAdd =e.getMatch().get(MatchField.IPV4_DST);
-            srcAdd = e.getMatch().get(MatchField.IPV4_SRC);
-            inPort =e.getMatch().get(MatchField.IN_PORT);
-            //srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt(); //键（key）用字符串形式实现，与long效果上一样，类型不一样
-            srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt();
+        int lastCount = allFlowAllTimeOfSwitch.size();
 
-            if(inPort==null || inPort ==OFPort.ALL) {
-                continue;
+        try {
+            List<OFFlowStatsEntry> entries = reply.getEntries();
+
+            System.out.println("-----flowsThisTerm---- before loop");
+            for (OFFlowStatsEntry e :entries) {
+                if(e == null)
+                    continue;
+
+
+                //Iterable<MatchField<?>> matchFields = ((OFMatchV3) e.getMatch()).getMatchFields(MatchField.BSN_INGRESS_PORT_GROUP_ID);
+                //e.getMatch().get();
+                //srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt(); //键（key）用字符串形式实现，与long效果上一样，类型不一样
+                inPort =e.getMatch().get(MatchField.IN_PORT);
+
+
+                if(inPort==null || inPort ==OFPort.ALL) {
+                    continue;
+                }
+
+                //得到outPort
+                List<OFInstruction> instruction = e.getInstructions();
+                for (OFInstruction i : instruction) {
+                    if (i instanceof OFInstructionApplyActions) {
+                        List<OFAction> action = ((OFInstructionApplyActions) i).getActions();
+                        for (OFAction a : action) {
+                            if (a.getType() == OFActionType.OUTPUT) {
+                                outPort = ((OFActionOutput) a).getPort();
+                                break;
+                            }
+                        }
+                    } else
+                        continue;
+                }
+
+                if(outPort.getPortNumber()<1)
+                    continue;
+
+
+                packetCount = e.getPacketCount().getValue();
+                byteCount = e.getByteCount().getValue();
+                dstAdd =e.getMatch().get(MatchField.IPV4_DST);
+                srcAdd = e.getMatch().get(MatchField.IPV4_SRC);
+                type = e.getMatch().get(MatchField.PACKET_TYPE);
+                srcMac = e.getMatch().get(MatchField.ETH_SRC);
+                dstMac = e.getMatch().get(MatchField.ETH_DST);
+
+                srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt();
+
+               /* System.out.println("-----flowsThisTerm---- packetCount="+packetCount+" dstAdd="+dstAdd
+                        +" srcAdd="+srcAdd+" inPort="+inPort
+                        +" srcMac="+srcMac+" dstMac="+dstMac
+                        +" type="+type);*/
+
+                typeName = "";
+                if(type!=null) {
+                    int namespace = type.getNamespace();
+                    int nsType = type.getNsType();
+                    //System.out.println("-----flowsThisTerm---- namespace="+namespace+" nsType="+nsType);
+                    switch(namespace) {
+                        case 0:
+                            switch (nsType) {
+                                case 0:
+                                    typeName = "ETHERNET";
+                                    break;
+                                case 1:
+                                    typeName =  "NO_PACKET";
+                                    break;
+                                case 0xFFFF:
+                                    typeName = "EXPERIMENTER";
+                            }
+                            break;
+                        case 1:
+                            switch (nsType) {
+                                case 0x800:
+                                    typeName = "IPV4";
+                                    break;
+                                case 0x86dd:
+                                    typeName = "IPV6";
+                            }
+                            break;
+                    }
+
+                } else {
+                    typeName = "LOW_LAYER_PACKET";
+                    //MyLog.warn("handleFlowStatsReply_combineWithIPAndPorts error： Sampling 统计信息收集出错， 流表中流的协议为空");
+                }
+
+                if(flowsThisTerm.containsKey(srcAndDst)) {
+                    System.out.println("-----flowsThisTerm---- 00");
+                    Map<String, Object> enums = flowsThisTerm.get(srcAndDst);
+                    int count = (int) enums.get("count");
+                    enums.put("count", count + packetCount);
+                    flowsThisTerm.put(srcAndDst, enums);
+                    System.out.println("-----flowsThisTerm---- 01");
+                } else {
+                    Map<String, Object> enums = new HashMap<>();
+                    enums.put("srcIP", srcAdd.getInt());
+                    enums.put("dstIP", dstAdd.getInt());
+                    enums.put("srcMac", srcMac.getLong());
+                    enums.put("dstMac", dstMac.getLong());
+                    enums.put("packetType", typeName);
+                    enums.put("count", 1); //packetCount(流中包含的包数目)
+                    enums.put("byteCount", byteCount);
+                    enums.put("time", time);
+                    flowsThisTerm.put(srcAndDst, enums);
+                }
+               // System.out.println("-----flowsThisTerm---- keys="+flowsThisTerm.keySet()+" values="+flowsThisTerm.values());
+
             }
 
-            if(flowsThisTerm.containsKey(srcAndDst)) {
-                Map<String, Number> enums = flowsThisTerm.get(srcAndDst);
-                int count = (int) enums.get("count");
-                enums.put("count", count + packetCount);
-                flowsThisTerm.put(srcAndDst, enums);
-            } else {
-                Map<String, Number> enums = new HashMap<>();
-                enums.put("srcIP", srcAdd.getInt());
-                enums.put("dstIP", srcAdd.getInt());
-                enums.put("count", 1);
-                enums.put("time", time);
-                flowsThisTerm.put(srcAndDst, enums);
-            }
 
+            if(allFlowAllTimeOfSwitch==null)
+                MyLog.error("-----flowsThisTerm---- allFlowAllTimeOfSwitch is null");
+            if(flowsThisTerm==null)
+                MyLog.error("-----flowsThisTerm---- flowsThisTerm is null");
+            allFlowAllTimeOfSwitch.add(flowsThisTerm);
+            System.out.println("-----flowsThisTerm---- 9");
+
+            //TODO --计算流经该交换机的总包数
+        } catch (Exception e) {
+            MyLog.error("handleFlowStatsReply_combineWithIPAndPorts error： Sampling 统计信息收集出错，抛出异常");
+
+            if(lastCount+1 == allFlowAllTimeOfSwitch.size()) {
+                allFlowAllTimeOfSwitch.remove(allFlowAllTimeOfSwitch.size()-1);
+            } else if(lastCount!=allFlowAllTimeOfSwitch.size()){
+                MyLog.error("handleFlowStatsReply_combineWithIPAndPorts error: 异常时出现另一个错误，时间周期数过长");
+                if(lastCount>0)
+                    allFlowAllTimeOfSwitch = allFlowAllTimeOfSwitch.subList(0, lastCount-1);
+
+            }
+            lastCount = allFlowAllTimeOfSwitch.size();
+            e.printStackTrace();
         }
 
-        allFlowAllTimeOfSwitch.add(flowsThisTerm);
-
-        if(allFlowAllTimeOfSwitch.size()>MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH) { //将list限制在最大长度以内
+        if(allFlowAllTimeOfSwitch.size()>MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH) { //将list限制在最大长度以内(长度n为时间周期数)
             allFlowAllTimeOfSwitch.remove(0);
         }
-        //TODO --计算流经该交换机的总包数
 
     }
 
@@ -349,7 +452,7 @@ public class NetworkStore {
 
 
 
-    public List<Map<String, Map<String, Number>>> getAllFlowAllTimeOfSwitch() {
+    public List<Map<String, Map<String, Object>>> getAllFlowAllTimeOfSwitch() {
         return allFlowAllTimeOfSwitch;
     }
 
@@ -485,7 +588,7 @@ public class NetworkStore {
     }*/
 
     //计算链路的最大带宽---入口带宽与出口带宽的最小值
-    public long calculateMaxBand(OFSwitch fromSw, OFSwitch toSw, OFPort inPort, OFPort outPort) {
+    /*public long calculateMaxBand(OFSwitch fromSw, OFSwitch toSw, OFPort inPort, OFPort outPort) {
 
         long fromBand = 0, toBand = 0;
         //inport
@@ -507,7 +610,7 @@ public class NetworkStore {
                 break;
         }
         return (fromBand >= toBand ? toBand : fromBand);
-    }
+    }*/
 
     /*//计算当前带宽，输出
     public void calCurrentBand() {
@@ -526,7 +629,7 @@ public class NetworkStore {
     }*/
 }
 
-class LinkDataInfo {
+/*class LinkDataInfo {
 
     protected OFSwitch fromSw;
     protected OFSwitch toSw;
@@ -593,9 +696,9 @@ class LinkDataInfo {
     }
 
 
-}
+}*/
 
-class LinkTimeInfo {
+/*class LinkTimeInfo {
 
     protected Link l;
     protected long allTime = -1;
@@ -644,8 +747,9 @@ class LinkTimeInfo {
     }
 
 
-}
+}*/
 
+/*
 class MulLinkDataInfo {
 
     private List<LinkDataInfo> linkDataInfos;
@@ -660,5 +764,6 @@ class MulLinkDataInfo {
 
 
 }
+*/
 
 

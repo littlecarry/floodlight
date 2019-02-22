@@ -22,7 +22,6 @@ import org.projectfloodlight.openflow.types.OFPort;
 
 import java.util.*;
 import java.util.logging.Logger;
-import net.floodlightcontroller.AdaptiveParamers;
 
 //TODO 在QOS和攻击评估（估计可以先设定一个值）
 //返回需要采集数据的节点
@@ -124,7 +123,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
 
         boolean isAbnormal = false;
         if (links != null && !links.isEmpty()) {
-            MyLog.info("nodeSelection info : doing node selection.");
+            //MyLog.info("nodeSelection info : doing node selection.");
             List<Link> blockedLinks = new ArrayList<>();
             List<IOFSwitch> existingSwitches = new ArrayList<>();
 
