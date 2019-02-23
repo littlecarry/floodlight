@@ -3,6 +3,10 @@ package net.floodlightcontroller.QoSEvaluation;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.core.IOFSwitch;
@@ -31,7 +35,7 @@ public class NetworkStore {
     protected List<LinkDataInfo> historyLinkStatus;
     protected List<LinkTimeInfo> linkTimeStatus;*/
     //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
-    protected  List<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
+    protected ConcurrentLinkedDeque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
     protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
 
     protected Map<String, Double> QosOfLinks; //瞬时的
@@ -54,11 +58,12 @@ public class NetworkStore {
 
 
     public NetworkStore(){
+        //ConcurrentHashMap
         /*currentLinkStatus = new ArrayList<LinkDataInfo>();
         historyLinkStatus = new ArrayList<LinkDataInfo>();
         linkTimeStatus = new ArrayList<LinkTimeInfo>();*/
 
-        allFlowAllTimeOfSwitch = new ArrayList<>();
+        allFlowAllTimeOfSwitch = new ConcurrentLinkedDeque<>();
         QosOfLinks = new HashMap<>();
         SecurityOfNodes = new HashMap<>();
         echoReplyDelay = new HashMap<>();
@@ -311,7 +316,7 @@ public class NetworkStore {
         try {
             List<OFFlowStatsEntry> entries = reply.getEntries();
 
-            System.out.println("-----flowsThisTerm---- before loop");
+            //System.out.println("-----flowsThisTerm---- before loop");
             for (OFFlowStatsEntry e :entries) {
                 if(e == null)
                     continue;
@@ -354,7 +359,11 @@ public class NetworkStore {
                 srcMac = e.getMatch().get(MatchField.ETH_SRC);
                 dstMac = e.getMatch().get(MatchField.ETH_DST);
 
-                srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt();
+                if(srcAdd!=null && dstAdd !=null) {
+                    srcAndDst = srcAdd.getInt()+":"+dstAdd.getInt();
+                } else {
+                    continue;
+                }
 
                /* System.out.println("-----flowsThisTerm---- packetCount="+packetCount+" dstAdd="+dstAdd
                         +" srcAdd="+srcAdd+" inPort="+inPort
@@ -409,7 +418,7 @@ public class NetworkStore {
                     enums.put("srcMac", srcMac.getLong());
                     enums.put("dstMac", dstMac.getLong());
                     enums.put("packetType", typeName);
-                    enums.put("count", 1); //packetCount(流中包含的包数目)
+                    enums.put("count", packetCount); //packetCount(流中包含的包数目)
                     enums.put("byteCount", byteCount);
                     enums.put("time", time);
                     flowsThisTerm.put(srcAndDst, enums);
@@ -424,21 +433,11 @@ public class NetworkStore {
             if(flowsThisTerm==null)
                 MyLog.error("-----flowsThisTerm---- flowsThisTerm is null");
             allFlowAllTimeOfSwitch.add(flowsThisTerm);
-            System.out.println("-----flowsThisTerm---- 9");
+            //System.out.println("-----flowsThisTerm---- 9");
 
             //TODO --计算流经该交换机的总包数
         } catch (Exception e) {
             MyLog.error("handleFlowStatsReply_combineWithIPAndPorts error： Sampling 统计信息收集出错，抛出异常");
-
-            if(lastCount+1 == allFlowAllTimeOfSwitch.size()) {
-                allFlowAllTimeOfSwitch.remove(allFlowAllTimeOfSwitch.size()-1);
-            } else if(lastCount!=allFlowAllTimeOfSwitch.size()){
-                MyLog.error("handleFlowStatsReply_combineWithIPAndPorts error: 异常时出现另一个错误，时间周期数过长");
-                if(lastCount>0)
-                    allFlowAllTimeOfSwitch = allFlowAllTimeOfSwitch.subList(0, lastCount-1);
-
-            }
-            lastCount = allFlowAllTimeOfSwitch.size();
             e.printStackTrace();
         }
 
@@ -452,7 +451,7 @@ public class NetworkStore {
 
 
 
-    public List<Map<String, Map<String, Object>>> getAllFlowAllTimeOfSwitch() {
+    public ConcurrentLinkedDeque<Map<String, Map<String, Object>>> getAllFlowAllTimeOfSwitch() {
         return allFlowAllTimeOfSwitch;
     }
 

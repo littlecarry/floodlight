@@ -224,6 +224,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                             if (inToOutSwitchMapping.containsKey(sw)) {
                                 indegreeAdjust(sw, inToOutSwitchMapping, switchMap); //switchMap中一定包含sw。理论上inToOutSwitchMapping中也一定包含sw
                             } else {
+                                System.out.println("--------sw="+sw.getId()+"  ");
                                 MyLog.error("Abnormal Pattern in Node Selection: sw is not contained in inToOutSwitchMapping.");
                             }
                         }
@@ -242,15 +243,16 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                     } else { ////非空存在环
                         int maxVal = -1;
                         IOFSwitch maxSw = null;
-                        for (IOFSwitch sw : switchCounterMap.keySet()) {
-                            if (switchCounterMap.get(sw) > maxVal) {
+                        for (IOFSwitch sw : switchMap.keySet()) {
+                            int edgeCount = switchMap.get(sw).outDegree;
+                            if ( edgeCount > maxVal) { //inDegree会修改，outDegree本函数中不会，用outDegree替代边数（等价于边数）
                                 maxSw = sw;
-                                maxVal = switchCounterMap.get(sw);
+                                maxVal = edgeCount;
                             }
                         }
                         //System.out.println("maxSw="+maxSw);
                         if (maxSw != null) {
-                            switchCounterMap.remove(maxSw);
+                            switchMap.remove(maxSw);
                             resultSet.add(maxSw);
                             indegreeAdjust(maxSw, inToOutSwitchMapping, switchMap);
                         } else {
@@ -303,6 +305,8 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
      */
     void indegreeAdjust(IOFSwitch sw, Map<IOFSwitch, List<IOFSwitch>> inToOutSwitchMapping,  Map<IOFSwitch, SwitchOfDegree> switchMap) {
         List<IOFSwitch> list = inToOutSwitchMapping.get(sw);
+        if(list == null)
+            return;
         for (IOFSwitch iofSwitch : list) {
             if (switchMap.containsKey(iofSwitch) && switchMap.get(iofSwitch).inDegree > 0) {//保证操作是正确的，非源节点（汇聚节点）可能导致操作异常
                 SwitchOfDegree switchOfDegree = switchMap.get(iofSwitch);
