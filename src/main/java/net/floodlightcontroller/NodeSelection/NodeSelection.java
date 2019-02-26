@@ -3,6 +3,7 @@ package net.floodlightcontroller.NodeSelection;
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.MyUtils.MyUtils;
 import net.floodlightcontroller.QoSEvaluation.NetworkStore;
+import net.floodlightcontroller.StoreAndQueryInMySQL.StoreThread;
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFMessageListener;
@@ -15,7 +16,7 @@ import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
 import net.floodlightcontroller.linkdiscovery.Link;
 import net.floodlightcontroller.linkdiscovery.internal.LinkInfo;
-import org.apache.commons.lang.StringUtils;
+//import org.apache.commons.lang.StringUtils;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -48,6 +49,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
 
     //线程
     NodeSelectionThread nodeSelectionThread;
+    StoreThread storeThread;
 
     @Override
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
@@ -103,6 +105,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         ns = NetworkStore.getInstance();
         coreSwitches = new HashSet<>();
         nodeSelectionThread = new NodeSelectionThread(this);
+        storeThread = new StoreThread(this);
     }
 
     @Override
@@ -111,6 +114,8 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 
         nodeSelectionThread.start();
+
+        storeThread.start();
 
 
     }
@@ -274,7 +279,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                     coreSwitches.addAll(resultSet);
                     return coreSwitches;
                 } else {
-                    MyLog.error("There are some mistakes in Node Selection sothat cannot find the result");
+                    MyLog.error("There are some mistakes in Node Selection so that cannot find the result");
                 }
 
             } else { //normal模式

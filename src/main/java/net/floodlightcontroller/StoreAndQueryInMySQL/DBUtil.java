@@ -19,8 +19,10 @@ public class DBUtil {
 
     private static final String DRIVER = "com.mysql.jdbc.Driver";
 
-    private static final String sql = "INSERT INTO tbl_user_info(id, srcAdd, dstAdd, srcMac, dstMac, byteCount) "
-                                     + "  VALUES(?, ?, ?, ?, ?, ?)"; //TODO 新建相应的表，并将数据插入
+    private static final String sql = "INSERT INTO packet_info(switchId, srcAdd, dstAdd, srcMac, dstMac, byteCount, protocolType) "
+                                     + "  VALUES(?, ?, ?, ?, ?, ?,?)";
+    /*private static final String sql = "INSERT INTO packet_info(id, switchId, srcAdd, dstAdd, srcMac, dstMac, byteCount, protocolType) "
+            + "  VALUES(?, ?, ?, ?, ?, ?,?,?)"; */
             //"INSERT INTO tbl_user_info(user_name, age, sex, create_dt) "
     //				+ " VALUES(?, ?, ?, ?)"
 
@@ -52,13 +54,17 @@ public class DBUtil {
             try {
                 for(int i=0; i<list.size(); i++) {
                     //注解位置
-                    preparedStatement.setString(1, (String) list.get(i).get("id")); //id
+                    //preparedStatement.setString(1, (String) list.get(i).get("id")); //id -- 设置规则待议，是整数还是3元组（因为五元组中获取不到端口号）
+                    preparedStatement.setString(1, (String) list.get(i).get("switchId"));
                     preparedStatement.setString(2, (String) list.get(i).get("srcAdd"));
                     preparedStatement.setString(3, (String) list.get(i).get("dstAdd"));
                     preparedStatement.setString(4, (String) list.get(i).get("srcMac"));
                     preparedStatement.setString(5, (String) list.get(i).get("dstMac"));
                     preparedStatement.setString(6, (String) list.get(i).get("byteCount"));
+                    preparedStatement.setString(7, (String) list.get(i).get("protocolType"));
+                    //TODO  可以添加的信息：协议类型    针对包
                     //preparedStatement.setString(7, (String) list.get(i).get("srcAdd"));
+                    MyLog.info("storing packets");
                     conn.commit();
                 }
 
@@ -73,8 +79,6 @@ public class DBUtil {
             }
 
 
-                //4.执行
-                //for(int)
             return conn;
         } //end while -- dead while (true)
 

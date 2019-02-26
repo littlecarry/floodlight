@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import com.sun.jmx.remote.internal.ArrayQueue;
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.core.IOFSwitch;
 import org.projectfloodlight.openflow.protocol.*;
@@ -35,7 +36,8 @@ public class NetworkStore {
     protected List<LinkDataInfo> historyLinkStatus;
     protected List<LinkTimeInfo> linkTimeStatus;*/
     //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
-    protected ConcurrentLinkedDeque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
+    //protected Deque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
+    protected ConcurrentHashMap<Long, Deque<Map<String, Map<String, Object>>>> allFlowAllTimeOfAllSwitch;
     protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
 
     protected Map<String, Double> QosOfLinks; //瞬时的
@@ -63,7 +65,7 @@ public class NetworkStore {
         historyLinkStatus = new ArrayList<LinkDataInfo>();
         linkTimeStatus = new ArrayList<LinkTimeInfo>();*/
 
-        allFlowAllTimeOfSwitch = new ConcurrentLinkedDeque<>();
+        //allFlowAllTimeOfSwitch = new ArrayDeque<>(MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH);
         QosOfLinks = new HashMap<>();
         SecurityOfNodes = new HashMap<>();
         echoReplyDelay = new HashMap<>();
@@ -71,6 +73,7 @@ public class NetworkStore {
         droppedPacketsOfLinks = new HashMap<>();
         throughOfLinks = new HashMap<>();
         historyBytesOfLinks = new HashMap<>();
+        allFlowAllTimeOfAllSwitch =new ConcurrentHashMap<>();
     }
 
     /**
@@ -307,11 +310,10 @@ public class NetworkStore {
         MacAddress srcMac, dstMac;
         OFPort inPort,outPort=null;
         String typeName;
+        long switchId = sw.getId().getLong();
 
         Map<String, Map<String, Object>> flowsThisTerm = new HashMap<>();
         long time = new Date().getTime();
-
-        int lastCount = allFlowAllTimeOfSwitch.size();
 
         try {
             List<OFFlowStatsEntry> entries = reply.getEntries();
@@ -413,6 +415,7 @@ public class NetworkStore {
                     System.out.println("-----flowsThisTerm---- 01");
                 } else {
                     Map<String, Object> enums = new HashMap<>();
+                    enums.put("switch", switchId); //在哪个路由器采的数据包
                     enums.put("srcIP", srcAdd.getInt());
                     enums.put("dstIP", dstAdd.getInt());
                     enums.put("srcMac", srcMac.getLong());
@@ -428,22 +431,32 @@ public class NetworkStore {
             }
 
 
-            if(allFlowAllTimeOfSwitch==null)
-                MyLog.error("-----flowsThisTerm---- allFlowAllTimeOfSwitch is null");
+           Deque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch = null;
             if(flowsThisTerm==null)
                 MyLog.error("-----flowsThisTerm---- flowsThisTerm is null");
-            allFlowAllTimeOfSwitch.add(flowsThisTerm);
-            //System.out.println("-----flowsThisTerm---- 9");
+            synchronized (allFlowAllTimeOfAllSwitch) {   //-- allFlowAllTimeOfSwitch与sampling模块同步
+                if(allFlowAllTimeOfAllSwitch.containsKey(switchId)) {
+                    allFlowAllTimeOfSwitch = allFlowAllTimeOfAllSwitch.get(switchId);
+                    allFlowAllTimeOfSwitch.add(flowsThisTerm);
+                    allFlowAllTimeOfAllSwitch.put(switchId, allFlowAllTimeOfSwitch);
+                } else {
+                    allFlowAllTimeOfSwitch = new ArrayDeque<>(MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH);
+                    allFlowAllTimeOfSwitch.add(flowsThisTerm);
+                    allFlowAllTimeOfAllSwitch.put(switchId, allFlowAllTimeOfSwitch);
+                }
 
+            }//end  synchronized
+            //System.out.println("-----flowsThisTerm---- 9");
             //TODO --计算流经该交换机的总包数
         } catch (Exception e) {
             MyLog.error("handleFlowStatsReply_combineWithIPAndPorts error： Sampling 统计信息收集出错，抛出异常");
             e.printStackTrace();
         }
 
-        if(allFlowAllTimeOfSwitch.size()>MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH) { //将list限制在最大长度以内(长度n为时间周期数)
+
+        /*if(allFlowAllTimeOfSwitch.size()>MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH) { //将list限制在最大长度以内(长度n为时间周期数)
             allFlowAllTimeOfSwitch.remove(0);
-        }
+        }*/
 
     }
 
@@ -451,8 +464,8 @@ public class NetworkStore {
 
 
 
-    public ConcurrentLinkedDeque<Map<String, Map<String, Object>>> getAllFlowAllTimeOfSwitch() {
-        return allFlowAllTimeOfSwitch;
+    public ConcurrentHashMap<Long, Deque<Map<String, Map<String, Object>>>> getAllFlowAllTimeOfAllSwitch() {
+        return allFlowAllTimeOfAllSwitch;
     }
 
     public Map<String, Double> getQosOfLinks() {

@@ -1,13 +1,16 @@
 
 
 CREATE TABLE
-    tbl_user_info
+    packet_info
     (
         id INT NOT NULL AUTO_INCREMENT,
-        user_name VARCHAR(20) NOT NULL,
-        age INT NOT NULL,
-        sex INT(1) NOT NULL,
-        create_dt DATE NOT NULL,
+        switch_id BIGINT NOT NULL,
+        srcAdd BIGINT NOT NULL,
+        dstAdd BIGINT NOT NULL,
+        srcMac BIGINT NOT NULL,
+        dstMac BIGINT NOT NULL,
+        byteCount INT NOT NULL,
+        protocolType VARCHAR(20) NOT NULL,
         PRIMARY KEY (id)
     )
     ENGINE=InnoDB DEFAULT CHARSET=utf8;

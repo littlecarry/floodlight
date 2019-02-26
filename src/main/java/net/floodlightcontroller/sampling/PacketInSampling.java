@@ -1,4 +1,5 @@
 package net.floodlightcontroller.sampling;
+//import com.kenai.jaffl.annotations.Synchronized;
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.QoSEvaluation.NetworkStore;
 import java.lang.*;
@@ -6,19 +7,21 @@ import org.projectfloodlight.openflow.protocol.OFPacketIn;
 
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class PacketInSampling {
     //static List<Map<String, Number>> pLists = new ArrayList<>(); //结构：【{"p":0.01,"time":1234567890123},{"p":0.02,"time":9876543210321}】--最大长度为3
-    static List<Double> pLists = new ArrayList<>();
+    static  ConcurrentHashMap<Long, List<Double>> pListsForSwitches = new ConcurrentHashMap<>();
+    //static List<Double> pLists = new ArrayList<>();
     static final int N = 6/*参考周期數*/, T = 34/*周期长度，单位为ms*/;
     static long lastTime;
     static final double B=1.0, A=1.0;//系数
     static final double initP = 0.01;
     static int packetCounter = 0;
     public static ConcurrentLinkedQueue<Map<String, Object>> sampledPackets = new ConcurrentLinkedQueue<>();
-    private ConcurrentLinkedDeque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
+    private ConcurrentHashMap<Long, Deque<Map<String, Map<String, Object>>>> allFlowAllTimeOfAllSwitch;
 
     //inFlowSampling params
     static final double INCREASE_FACTOR = 1.2;
@@ -29,16 +32,17 @@ public class PacketInSampling {
 
     //public static void f(){}
 
-    public void sampling() { //该函数不存在并发
-        adaptiveAdjustmentForP();//得到该周期包采样概率p
+    public void sampling(long switchId) { //该函数存在并发--
         NetworkStore ns = NetworkStore.getInstance();
-        allFlowAllTimeOfSwitch = ns.getAllFlowAllTimeOfSwitch();
+        allFlowAllTimeOfAllSwitch = ns.getAllFlowAllTimeOfAllSwitch();
+        Deque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch = allFlowAllTimeOfAllSwitch.get(switchId);
+        synchronized(allFlowAllTimeOfAllSwitch) {
+        adaptiveAdjustmentForP(switchId);//得到该周期包采样概率p
         int lengthOfTimes = allFlowAllTimeOfSwitch.size();
-        //Deque
         Map<String, Map<String, Object>> curFlows = allFlowAllTimeOfSwitch.peekLast();
         Map<String, Map<String, Object>> lastFlows = null;
         if(allFlowAllTimeOfSwitch.size()>=2) {
-            allFlowAllTimeOfSwitch.removeLast();
+            allFlowAllTimeOfSwitch.removeLast();  //若不与前面的方法同步，会被插队，导致队尾加入新元素
             lastFlows = allFlowAllTimeOfSwitch.peekLast();
             allFlowAllTimeOfSwitch.push(curFlows);
         } else {
@@ -50,6 +54,7 @@ public class PacketInSampling {
 
         if(lastFlows == null || lastFlows.isEmpty()) {
             newFlows.putAll(curFlows);
+            MyLog.info("PacketSampling:curFlows填充新流");
         } else { //必有非null的lastFlows
             for(String srcAndDst : curFlows.keySet()) {
                 HashMap<String, Object> flow = new HashMap<>();
@@ -74,12 +79,15 @@ public class PacketInSampling {
                 }
 
             }
+            MyLog.info("PacketSampling:非null的lastFlows，填充新流和旧流");
         }
 
-        newFlowSampling(newFlows, curFlows);
+        newFlowSampling(newFlows, curFlows, switchId);
         flowCompression(disFlows, curFlows);//curFlows用于接收字段修改（并全局化）
+            MyLog.info("sampledPackets.size="+sampledPackets.size());
+         } //end synchronized
 
-    }
+    } //end function sampling
 
     /*public void packetInSampling(OFPacketIn packetInMsg) {
         //判断新流旧流
@@ -128,10 +136,20 @@ public class PacketInSampling {
 
 
 
-    void adaptiveAdjustmentForP() { //pLists的最后一个的元素的p为当前的动态概率取值,pLists最大长度为N（需要记录的参考周期数）。
+    void adaptiveAdjustmentForP(long switchId) { //pLists的最后一个的元素的p为当前的动态概率取值,pLists最大长度为N（需要记录的参考周期数）。
         long time = new Date().getTime();
+        List<Double> pLists;
+        if(!pListsForSwitches.containsKey(switchId) || pListsForSwitches.get(switchId)==null) {
+            //MyLog.error("PacketInSampling-adaptiveAdjustmentForP error: switchId not found");
+            lastTime = time;
+            pLists = new ArrayList<>();
+            pLists.add(initP);
+            return;
+        }
+        pLists = pListsForSwitches.get(switchId);
+
         if(pLists.isEmpty()) {
-            lastTime =time;
+            lastTime = time;
             pLists.add(initP);
         } else {
             if(time - lastTime>T) { //更新动态概率p
@@ -239,11 +257,18 @@ public class PacketInSampling {
 
     }
 
-    void newFlowSampling(Map<String, Map<String, Object>> newFlows, Map<String, Map<String, Object>> originalFlows) { //新采样模式每个流最多只能采集一个包，并最多被计数一次 ---经过该函数的包最终未都被采样
+    void newFlowSampling(Map<String, Map<String, Object>> newFlows, Map<String, Map<String, Object>> originalFlows, long switchId) { //新采样模式每个流最多只能采集一个包，并最多被计数一次 ---经过该函数的包最终未都被采样
 
         if(newFlows==null||newFlows.size()==0) {
             return;
         }
+
+        if(!pListsForSwitches.containsKey(switchId) || pListsForSwitches.get(switchId)==null) {
+            MyLog.error("PacketInSampling-newFlowSampling error: switchId not found");
+            return;
+        }
+        List<Double> pLists = pListsForSwitches.get(switchId);
+
         int threshold = (int) (1/pLists.get(pLists.size()-1));
         for(String srcAndDst : newFlows.keySet()) {
             Map<String, Object> flow = newFlows.get(srcAndDst);
