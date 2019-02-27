@@ -4,13 +4,20 @@ CREATE TABLE
     packet_info
     (
         id INT NOT NULL AUTO_INCREMENT,
+        combine_id VARCHAR(100) NOT NULL,
         switch_id BIGINT NOT NULL,
-        srcAdd BIGINT NOT NULL,
-        dstAdd BIGINT NOT NULL,
-        srcMac BIGINT NOT NULL,
-        dstMac BIGINT NOT NULL,
-        byteCount INT NOT NULL,
-        protocolType VARCHAR(20) NOT NULL,
+        src_IP BIGINT NOT NULL,
+        dst_IP BIGINT NOT NULL,
+        src_mac BIGINT NOT NULL,
+        dst_mac BIGINT NOT NULL,
+        byte_count INT NOT NULL,
+        protocol_type VARCHAR(20) NOT NULL,
         PRIMARY KEY (id)
     )
     ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+
+
+
+    SET AUTOCOMMIT = 0; //关闭自动提交

@@ -37,7 +37,7 @@ public class NetworkStore {
     protected List<LinkTimeInfo> linkTimeStatus;*/
     //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
     //protected Deque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
-    protected ConcurrentHashMap<Long, Deque<Map<String, Map<String, Object>>>> allFlowAllTimeOfAllSwitch;
+    protected static ConcurrentHashMap<Long, Deque<Map<String, Map<String, Object>>>> allFlowAllTimeOfAllSwitch = new ConcurrentHashMap<>();
     protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
 
     protected Map<String, Double> QosOfLinks; //瞬时的
@@ -59,7 +59,7 @@ public class NetworkStore {
     protected double security = 0.8;
 
 
-    public NetworkStore(){
+    private NetworkStore(){
         //ConcurrentHashMap
         /*currentLinkStatus = new ArrayList<LinkDataInfo>();
         historyLinkStatus = new ArrayList<LinkDataInfo>();
@@ -73,7 +73,6 @@ public class NetworkStore {
         droppedPacketsOfLinks = new HashMap<>();
         throughOfLinks = new HashMap<>();
         historyBytesOfLinks = new HashMap<>();
-        allFlowAllTimeOfAllSwitch =new ConcurrentHashMap<>();
     }
 
     /**
@@ -309,7 +308,8 @@ public class NetworkStore {
         PacketType type;
         MacAddress srcMac, dstMac;
         OFPort inPort,outPort=null;
-        String typeName;
+        String protocolType;
+        String combineId = null;
         long switchId = sw.getId().getLong();
 
         Map<String, Map<String, Object>> flowsThisTerm = new HashMap<>();
@@ -372,7 +372,7 @@ public class NetworkStore {
                         +" srcMac="+srcMac+" dstMac="+dstMac
                         +" type="+type);*/
 
-                typeName = "";
+                protocolType = "";
                 if(type!=null) {
                     int namespace = type.getNamespace();
                     int nsType = type.getNsType();
@@ -381,28 +381,28 @@ public class NetworkStore {
                         case 0:
                             switch (nsType) {
                                 case 0:
-                                    typeName = "ETHERNET";
+                                    protocolType = "ETHERNET";
                                     break;
                                 case 1:
-                                    typeName =  "NO_PACKET";
+                                    protocolType =  "NO_PACKET";
                                     break;
                                 case 0xFFFF:
-                                    typeName = "EXPERIMENTER";
+                                    protocolType = "EXPERIMENTER";
                             }
                             break;
                         case 1:
                             switch (nsType) {
                                 case 0x800:
-                                    typeName = "IPV4";
+                                    protocolType = "IPV4";
                                     break;
                                 case 0x86dd:
-                                    typeName = "IPV6";
+                                    protocolType = "IPV6";
                             }
                             break;
                     }
 
                 } else {
-                    typeName = "LOW_LAYER_PACKET";
+                    protocolType = "LOW_LAYER_PACKET";
                     //MyLog.warn("handleFlowStatsReply_combineWithIPAndPorts error： Sampling 统计信息收集出错， 流表中流的协议为空");
                 }
 
@@ -415,19 +415,23 @@ public class NetworkStore {
                     System.out.println("-----flowsThisTerm---- 01");
                 } else {
                     Map<String, Object> enums = new HashMap<>();
+                    combineId = ""+switchId +srcAdd+dstAdd+protocolType;
+                    enums.put("combineId", combineId);
                     enums.put("switch", switchId); //在哪个路由器采的数据包
                     enums.put("srcIP", srcAdd.getInt());
                     enums.put("dstIP", dstAdd.getInt());
                     enums.put("srcMac", srcMac.getLong());
                     enums.put("dstMac", dstMac.getLong());
-                    enums.put("packetType", typeName);
+                    enums.put("protocolType", protocolType);
                     enums.put("count", packetCount); //packetCount(流中包含的包数目)
                     enums.put("byteCount", byteCount);
                     enums.put("time", time);
                     flowsThisTerm.put(srcAndDst, enums);
+                    //System.out.println("-----flowsThisTerm----  switchId="+switchId);
                 }
-               // System.out.println("-----flowsThisTerm---- keys="+flowsThisTerm.keySet()+" values="+flowsThisTerm.values());
-
+                //System.out.println("-----flowsThisTerm---- keys="+flowsThisTerm.keySet()+" values="+flowsThisTerm.values()+" flowsThisTerm.size:"+flowsThisTerm.size());
+                //System.out.println("-----flowsThisTerm----  flowsThisTerm.size:"+flowsThisTerm.size());
+                //System.out.println("-----flowsThisTerm---- keys="+flowsThisTerm.keySet()+" flowsThisTerm.size:"+flowsThisTerm.size());
             }
 
 
@@ -438,10 +442,16 @@ public class NetworkStore {
                 if(allFlowAllTimeOfAllSwitch.containsKey(switchId)) {
                     allFlowAllTimeOfSwitch = allFlowAllTimeOfAllSwitch.get(switchId);
                     allFlowAllTimeOfSwitch.add(flowsThisTerm);
+                    //System.out.println("-----flowsThisTerm---- contain switchId allFlowAllTimeOfSwitch.size:"+allFlowAllTimeOfSwitch.size());
                     allFlowAllTimeOfAllSwitch.put(switchId, allFlowAllTimeOfSwitch);
                 } else {
                     allFlowAllTimeOfSwitch = new ArrayDeque<>(MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH);
+                    /*if(flowsThisTerm==null) {
+                        System.out.println("-----flowsThisTerm---- not contain switchId flowsThisTerm==null");
+                        return;
+                    }*/
                     allFlowAllTimeOfSwitch.add(flowsThisTerm);
+                    //System.out.println("-----flowsThisTerm---- not contain switchId allFlowAllTimeOfSwitch.size:"+allFlowAllTimeOfSwitch.size());
                     allFlowAllTimeOfAllSwitch.put(switchId, allFlowAllTimeOfSwitch);
                 }
 
