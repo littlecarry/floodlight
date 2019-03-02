@@ -42,7 +42,7 @@ public class DBUtil {
                 if(sampledPackets.size()>=100) {
                     isWake = true;
                 }
-                MyLog.info("connectDB--DBUtil----before packets storing: "+sampledPackets.size());
+                //MyLog.info("connectDB--DBUtil----before packets storing: "+sampledPackets.size());
             }
 
             List<Map<String, Object>> list = new ArrayList<>();
@@ -67,11 +67,8 @@ public class DBUtil {
                     }
                     Map<String, Object> map = list.get(i);
                     //preparedStatement.setString(1, (String) list.get(i).get("id")); //id -- 设置规则待议，是整数还是3元组（因为五元组中获取不到端口号）
-
-
-
                     preparedStatement.setString(1, (String) rev("combineId", map, false)); // TODO data too long
-                    preparedStatement.setLong(2,  Math.round((double) rev("switchId", map, true)));
+                    preparedStatement.setLong(2,  (new Double((double) rev("switchId", map, true))).longValue());
                     preparedStatement.setLong(3, Math.round((double) rev("srcIP", map, true)));
                     preparedStatement.setLong(4, Math.round((double) rev("dstIP", map, true)));
                     preparedStatement.setLong(5, Math.round((double) rev("srcMac", map, true)));
@@ -80,12 +77,10 @@ public class DBUtil {
                     preparedStatement.setString(8, (String) rev("protocolType", map, false));
                     //TODO  可以添加的信息：协议类型    针对包
                     //preparedStatement.setString(7, (String) list.get(i).get("srcAdd"));
-
-
                 }
                 preparedStatement.execute();
                 conn.commit();
-                MyLog.info("DBUtil info: storing packets");
+                //MyLog.info("DBUtil info: storing packets: list.size = "+list.size());
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -114,12 +109,11 @@ public class DBUtil {
         if(isNumber) {
             if(map.containsKey(key) && map.get(key)!=null)
                 return Double.valueOf(map.get(key).toString());
-
             return 0.0;
         } else {
             if(map.containsKey(key) && map.get(key)!=null)
                 return map.get(key).toString();
-            return "abcd";
+            return "";
         }
     }
 }

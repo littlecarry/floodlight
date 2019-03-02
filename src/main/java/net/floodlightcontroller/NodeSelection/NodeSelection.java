@@ -21,6 +21,7 @@ import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.types.OFPort;
 
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -145,7 +146,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                 IOFSwitch dstSwitch = this.getSwitchService().getSwitch(l.getDst());
                 OFPort inPort = l.getSrcPort();
                 OFPort outPort = l.getDstPort();
-                String srcSwitchAndPortAndDstSwitchAndPort = srcSwitch.getId().getLong()+":"+inPort.getPortNumber()
+                String srcSwitchAndPortAndDstSwitchAndPort = srcSwitch.getId().getLong()+":"+inPort.getPortNumber()  //TODO bug: java.lang.NullPointerException
                         +":"+dstSwitch.getId().getLong()+":"+outPort.getPortNumber();
                 //
                 /*double s1 = AdaptiveParamers.SecurityOfNodes.get(fromSw); //事实上需要每个节点一个安全值
@@ -193,7 +194,18 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                 }
 
             }
-            //System.out.println("----switchCounterMap----"+switchCounterMap.values());
+
+            /**
+             * //for test
+             * if(isAbnormal){
+                HashMap<IOFSwitch, Integer> list = new HashMap();
+                for(IOFSwitch s :switchMap.keySet()) {
+                    list.put(s, switchMap.get(s).inDegree);
+                }
+                System.out.println("----nodeSelection----  switchMap: "+ list.entrySet() +" inToOutSwitchMapping: "+inToOutSwitchMapping.entrySet());
+            }*/
+
+
 
             if (isAbnormal) {
                 List<SwitchOfDegree> switchList = new ArrayList<>(switchMap.values()); //得到所有交换机的SwitchOfDegree对象
@@ -229,8 +241,8 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                             if (inToOutSwitchMapping.containsKey(sw)) {
                                 indegreeAdjust(sw, inToOutSwitchMapping, switchMap); //switchMap中一定包含sw。理论上inToOutSwitchMapping中也一定包含sw
                             } else {
-                                System.out.println("--------sw="+sw.getId()+"  ");
-                                MyLog.error("Abnormal Pattern in Node Selection: sw is not contained in inToOutSwitchMapping.");
+                                //System.out.println("--------sw="+sw.getId()+"  --"+inToOutSwitchMapping.keySet()+"--  "+inToOutSwitchMapping.values());
+                                //MyLog.error("Abnormal Pattern in Node Selection: sw is not contained in inToOutSwitchMapping.");
                             }
                         }
 

@@ -3,10 +3,7 @@ package net.floodlightcontroller.QoSEvaluation;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.*;
 
 import com.sun.jmx.remote.internal.ArrayQueue;
 import net.floodlightcontroller.MyLog;
@@ -38,7 +35,7 @@ public class NetworkStore {
     //protected static List<Map<String, Map<String, Number>>> allFlowAllTimeOfSwitch;
     //protected Deque<Map<String, Map<String, Object>>> allFlowAllTimeOfSwitch;
     protected static ConcurrentHashMap<Long, Deque<Map<String, Map<String, Object>>>> allFlowAllTimeOfAllSwitch = new ConcurrentHashMap<>();
-    protected  static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
+    public static final int MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH =100;
 
     protected Map<String, Double> QosOfLinks; //瞬时的
     protected Map<String, Double> SecurityOfNodes; //瞬时的节点安全性
@@ -247,42 +244,47 @@ public class NetworkStore {
      */
     public void handleFlowStatsReply_combineWithSwitchPorts(OFFlowStatsReply reply, IOFSwitchBackend aSwitch) {
 
-        IOFSwitch dstSwitch = aSwitch;
-        OFPort inPort = null; //inPort：匹配域中的端口，outPort：（没有流表冲突时）表示某链路的源端口（该交换机为该链路的源节点）--因此以inPort计更准确
-        long byteCount = 0;
-        List<OFFlowStatsEntry> entries = reply.getEntries();
-        if(entries == null || entries.size()==0) {
-            MyLog.warn("handleFlowStatsReply_combineWithSwitchPorts error： 通量测量出错， 流状态响应流表为空");
-        }
-        for (OFFlowStatsEntry e : entries) {
-            byteCount = e.getByteCount().getValue()/8; //除以8转化为字节（B）
-
-            //Iterator<StatField<?>> kk = e.getStats().getStatFields().iterator();
-
-            inPort = e.getMatch().get(MatchField.IN_PORT);
-
-            if (inPort == null || inPort == OFPort.ALL) {//to controller
-                //MyLog.info("inPort is null, WARN in handleFlowStatsReply module");
-                continue;
+        try {
+            IOFSwitch dstSwitch = aSwitch;
+            OFPort inPort = null; //inPort：匹配域中的端口，outPort：（没有流表冲突时）表示某链路的源端口（该交换机为该链路的源节点）--因此以inPort计更准确
+            long byteCount = 0;
+            List<OFFlowStatsEntry> entries = reply.getEntries();
+            if(entries == null || entries.size()==0) {
+                MyLog.warn("handleFlowStatsReply_combineWithSwitchPorts error： 通量测量出错， 流状态响应流表为空");
             }
+            for (OFFlowStatsEntry e : entries) {
+                byteCount = e.getByteCount().getValue()/8; //除以8转化为字节（B）
 
-            if(byteCount<0)
-                MyLog.warn("handleFlowStatsReply_combineWithSwitchPorts error： 通量测量出错， byteCount<0");
-            String dstSwitchAndPort = aSwitch.getId().getLong()+":"+inPort.getPortNumber();
-            if(historyBytesOfLinks.containsKey(dstSwitchAndPort)) {
-                historyBytesOfLinks.put(dstSwitchAndPort, byteCount);
-                long through= byteCount - throughOfLinks.get(dstSwitchAndPort);
-                if(through<0)
-                    through =0;
-                //throughOfLinks.remove(dstSwitchAndPort);
-                throughOfLinks.put(dstSwitchAndPort, through);
-            } else {
-                historyBytesOfLinks.put(dstSwitchAndPort, byteCount);
-                throughOfLinks.put(dstSwitchAndPort, (long) 0);
+                //Iterator<StatField<?>> kk = e.getStats().getStatFields().iterator();
+
+                inPort = e.getMatch().get(MatchField.IN_PORT);
+
+                if (inPort == null || inPort == OFPort.ALL) {//to controller
+                    //MyLog.info("inPort is null, WARN in handleFlowStatsReply module");
+                    continue;
+                }
+
+                if(byteCount<0)
+                    MyLog.warn("handleFlowStatsReply_combineWithSwitchPorts error： 通量测量出错， byteCount<0");
+                String dstSwitchAndPort = aSwitch.getId().getLong()+":"+inPort.getPortNumber();
+                if(historyBytesOfLinks.containsKey(dstSwitchAndPort)) {
+                    historyBytesOfLinks.put(dstSwitchAndPort, byteCount);
+                    long through= byteCount - throughOfLinks.get(dstSwitchAndPort);
+                    if(through<0)
+                        through =0;
+                    //throughOfLinks.remove(dstSwitchAndPort);
+                    throughOfLinks.put(dstSwitchAndPort, through);
+                } else {
+                    historyBytesOfLinks.put(dstSwitchAndPort, byteCount);
+                    throughOfLinks.put(dstSwitchAndPort, (long) 0);
+                }
+
+                //throughOfLinks.put(dstSwitchAndPort, byteCount);
+
             }
-
-            //throughOfLinks.put(dstSwitchAndPort, byteCount);
-
+        } catch (Exception e) {
+            MyLog.warn("handleFlowStatsReply_combineWithSwitchPorts--NetworkStore error");
+            e.printStackTrace();
         }
         /*for(String str :historyBytesOfLinks.keySet()) {
             System.out.println("through------:"+str+" bytecount="+throughOfLinks.get(str));
@@ -367,7 +369,7 @@ public class NetworkStore {
                     continue;
                 }
 
-               /* System.out.println("-----flowsThisTerm---- packetCount="+packetCount+" dstAdd="+dstAdd
+                /*System.out.println("-----flowsThisTerm---- packetCount="+packetCount+" dstAdd="+dstAdd
                         +" srcAdd="+srcAdd+" inPort="+inPort
                         +" srcMac="+srcMac+" dstMac="+dstMac
                         +" type="+type);*/
@@ -400,24 +402,24 @@ public class NetworkStore {
                             }
                             break;
                     }
-
+                    protocolType =protocolType + ":"+namespace+":"+nsType;
                 } else {
                     protocolType = "LOW_LAYER_PACKET";
                     //MyLog.warn("handleFlowStatsReply_combineWithIPAndPorts error： Sampling 统计信息收集出错， 流表中流的协议为空");
                 }
 
+
+
                 if(flowsThisTerm.containsKey(srcAndDst)) {
-                    System.out.println("-----flowsThisTerm---- 00");
                     Map<String, Object> enums = flowsThisTerm.get(srcAndDst);
-                    int count = (int) enums.get("count");
+                    int count =  (new Long((long) enums.get("count"))).intValue();
                     enums.put("count", count + packetCount);
                     flowsThisTerm.put(srcAndDst, enums);
-                    System.out.println("-----flowsThisTerm---- 01");
                 } else {
                     Map<String, Object> enums = new HashMap<>();
-                    combineId = ""+switchId +srcAdd+dstAdd+protocolType;
+                    combineId = switchId +":"+srcAdd+":"+dstAdd/*+":"+protocolType*/;
                     enums.put("combineId", combineId);
-                    enums.put("switch", switchId); //在哪个路由器采的数据包
+                    enums.put("switchId", switchId); //在哪个路由器采的数据包
                     enums.put("srcIP", srcAdd.getInt());
                     enums.put("dstIP", dstAdd.getInt());
                     enums.put("srcMac", srcMac.getLong());
@@ -445,7 +447,7 @@ public class NetworkStore {
                     //System.out.println("-----flowsThisTerm---- contain switchId allFlowAllTimeOfSwitch.size:"+allFlowAllTimeOfSwitch.size());
                     allFlowAllTimeOfAllSwitch.put(switchId, allFlowAllTimeOfSwitch);
                 } else {
-                    allFlowAllTimeOfSwitch = new ArrayDeque<>(MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH);
+                    allFlowAllTimeOfSwitch = new LinkedBlockingDeque<>(MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH*2);
                     /*if(flowsThisTerm==null) {
                         System.out.println("-----flowsThisTerm---- not contain switchId flowsThisTerm==null");
                         return;
@@ -455,18 +457,17 @@ public class NetworkStore {
                     allFlowAllTimeOfAllSwitch.put(switchId, allFlowAllTimeOfSwitch);
                 }
 
+                int len = allFlowAllTimeOfSwitch.size();
+                while(len-->MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH){
+                    allFlowAllTimeOfSwitch.pop();
+                }
+
             }//end  synchronized
-            //System.out.println("-----flowsThisTerm---- 9");
             //TODO --计算流经该交换机的总包数
         } catch (Exception e) {
             MyLog.error("handleFlowStatsReply_combineWithIPAndPorts error： Sampling 统计信息收集出错，抛出异常");
             e.printStackTrace();
         }
-
-
-        /*if(allFlowAllTimeOfSwitch.size()>MAX_LENGTH_OF_ALL_FLOW_ALL_TIME_OF_SWITCH) { //将list限制在最大长度以内(长度n为时间周期数)
-            allFlowAllTimeOfSwitch.remove(0);
-        }*/
 
     }
 

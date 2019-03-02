@@ -15,7 +15,6 @@ public class StoreThread extends Thread {
 
     @Override
     public void run() {
-        MyLog.info("StoreThread--StoreThread---- ");
         while (true) {
             try {
 

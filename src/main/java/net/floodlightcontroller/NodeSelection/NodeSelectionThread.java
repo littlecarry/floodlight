@@ -61,6 +61,11 @@ public class NodeSelectionThread extends Thread {
                                 while(flag) {
                                     packetInSampling.sampling(switchId);
                                     curTime = new Date().getTime();
+                                    try {   //流出等待时间，让线程池中的线程全部停止
+                                        sleep(6);
+
+                                    } catch (Exception e) {
+                                    }
                                     if(curTime-time>200) {
                                         flag = false;
                                     }
