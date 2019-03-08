@@ -3,6 +3,7 @@ package net.floodlightcontroller.StoreAndQueryInMySQL;
 
 import net.floodlightcontroller.MyLog;
 import net.floodlightcontroller.sampling.PacketInSampling;
+import net.floodlightcontroller.sampling.SamplingTest;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -19,14 +20,14 @@ public class DBUtil {
 
     private static final String DRIVER = "com.mysql.jdbc.Driver";
 
-    private static final String sql = "INSERT INTO packet_info(combine_id, switch_id, src_IP, dst_IP, src_mac, dst_mac, byte_count, protocol_type) "
+    private static final String sql = "INSERT INTO packet_info_simple_packet_sampling_1000_20ms(combine_id, switch_id, src_IP, dst_IP, src_mac, dst_mac, byte_count, protocol_type) "
                                      + "  VALUES(?, ?, ?, ?, ?, ?, ?, ?)";
     /*private static final String sql = "INSERT INTO packet_info(id, switchId, srcAdd, dstAdd, srcMac, dstMac, byteCount, protocolType) "
             + "  VALUES(?, ?, ?, ?, ?, ?,?,?)"; */
             //"INSERT INTO tbl_user_info(user_name, age, sex, create_dt) "
     //				+ " VALUES(?, ?, ?, ?)"
 
-    protected static ConcurrentLinkedQueue<Map<String, Object>> sampledPackets = PacketInSampling.sampledPackets;
+    protected static ConcurrentLinkedQueue<Map<String, Object>> sampledPackets = SamplingTest.sampledPackets;//PacketInSampling.sampledPackets;
 
     public static void connectDB() throws Exception {
 
@@ -39,7 +40,7 @@ public class DBUtil {
                 } catch (Exception e) {
                     continue;
                 }
-                if(sampledPackets.size()>=100) {
+                if(sampledPackets.size()>=5) {
                     isWake = true;
                 }
                 //MyLog.info("connectDB--DBUtil----before packets storing: "+sampledPackets.size());
@@ -67,7 +68,7 @@ public class DBUtil {
                     }
                     Map<String, Object> map = list.get(i);
                     //preparedStatement.setString(1, (String) list.get(i).get("id")); //id -- 设置规则待议，是整数还是3元组（因为五元组中获取不到端口号）
-                    preparedStatement.setString(1, (String) rev("combineId", map, false)); // TODO data too long
+                    preparedStatement.setString(1, (String) rev("combineId", map, false));
                     preparedStatement.setLong(2,  (new Double((double) rev("switchId", map, true))).longValue());
                     preparedStatement.setLong(3, Math.round((double) rev("srcIP", map, true)));
                     preparedStatement.setLong(4, Math.round((double) rev("dstIP", map, true)));
@@ -77,10 +78,11 @@ public class DBUtil {
                     preparedStatement.setString(8, (String) rev("protocolType", map, false));
                     //TODO  可以添加的信息：协议类型    针对包
                     //preparedStatement.setString(7, (String) list.get(i).get("srcAdd"));
+                    preparedStatement.execute();
                 }
-                preparedStatement.execute();
+
                 conn.commit();
-                //MyLog.info("DBUtil info: storing packets: list.size = "+list.size());
+                MyLog.info("DBUtil info: storing packets: list.size = "+list.size());
 
             } catch (Exception e) {
                 e.printStackTrace();

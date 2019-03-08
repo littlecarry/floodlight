@@ -17,6 +17,7 @@ import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
 import net.floodlightcontroller.linkdiscovery.Link;
 import net.floodlightcontroller.linkdiscovery.internal.LinkInfo;
 //import org.apache.commons.lang.StringUtils;
+import net.floodlightcontroller.sampling.SamplingTest;
 import org.projectfloodlight.openflow.protocol.OFMessage;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.types.OFPort;
@@ -51,6 +52,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
     //线程
     NodeSelectionThread nodeSelectionThread;
     StoreThread storeThread;
+    SamplingTest samplingTestThread;
 
     @Override
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
@@ -107,6 +109,7 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         coreSwitches = new HashSet<>();
         nodeSelectionThread = new NodeSelectionThread(this);
         storeThread = new StoreThread(this);
+        samplingTestThread =new SamplingTest(this, 2);
     }
 
     @Override
@@ -114,7 +117,9 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
         //添加监听器，监听packet_in消息
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 
-        nodeSelectionThread.start();
+        //nodeSelectionThread.start();
+
+        samplingTestThread.start();
 
         storeThread.start();
 
@@ -153,7 +158,13 @@ public class NodeSelection implements IOFMessageListener, IFloodlightModule {
                 double s2 = AdaptiveParamers.SecurityOfNodes.get(toSw);*/
                 double s1 = ns.getSecurity(); //目前安全性取值为固定值
                 double s2 = ns.getSecurity();
-                double q = ns.getQosOfLinks().get(srcSwitchAndPortAndDstSwitchAndPort);//注意，该QosToAbnormalThreshold是双向的，同一条链路的两向QoS不同
+                double q;
+                if(ns.getQosOfLinks().containsKey(srcSwitchAndPortAndDstSwitchAndPort)) {
+                    q = ns.getQosOfLinks().get(srcSwitchAndPortAndDstSwitchAndPort);//注意，该QosToAbnormalThreshold是双向的，同一条链路的两向QoS不同
+                } else {
+                    q = 1.0; //TODO 设置q的初始值（若还未计算出结果）
+                }
+                 //q = ns.getQosOfLinks().get(srcSwitchAndPortAndDstSwitchAndPort);//注意，该QosToAbnormalThreshold是双向的，同一条链路的两向QoS不同
                 utils.mapCounter(switchCounterMap, srcSwitch, 1); //+1 一个节点的入度和出度其实是相同的，因为对于同一条链路每个节点既是入度节点又是出度节点
                 utils.mapCounter(switchCounterMap, dstSwitch, 1);
                 if (Math.sqrt(s1 * s2) * toAbnormalThreshold > q) {//此处为Abnormal状态；正常模式什么也不做

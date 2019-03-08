@@ -22,7 +22,7 @@ public class NodeSelectionThread extends Thread {
 
 
 
-    @Override
+    /*@Override
     public void run() {
         int i=0;
         while (true) {
@@ -50,6 +50,7 @@ public class NodeSelectionThread extends Thread {
                     for(IOFSwitch iofSwitch : switches) {
                         //switchIds.add(iofSwitch.getId().getLong());
                         //System.out.println("----NodeSelection----:"+iofSwitch.getId().getLong()+"   in the turn "+(i++));
+                        System.out.println("----NodeSelection----:"+iofSwitch.getId().getLong());
                         long switchId = iofSwitch.getId().getLong();
                         cachedThreadPool.execute(new Runnable() {
                             @Override
@@ -87,7 +88,73 @@ public class NodeSelectionThread extends Thread {
 
         } //end while
 
+    } //end run*/
+
+
+    @Override
+    public void run() {
+        int i=0;
+        while (true) {
+            try {
+                sleep(6);
+
+            } catch (Exception e) {
+                continue;
+            }
+
+            try {
+                //节点选择
+
+                try {   //流出等待时间，让线程池中的线程全部停止
+                    sleep(6);
+
+                } catch (Exception e) {
+                    MyLog.info("qosEvaluation-NormalActionThread info: sleep too short, may cause history cachedThreadPool still running");
+                }
+
+                //System.out.println(s);
+                        //switchIds.add(iofSwitch.getId().getLong());
+                        //System.out.println("----NodeSelection----:"+iofSwitch.getId().getLong()+"   in the turn "+(i++));
+                        //System.out.println("----NodeSelection----:"+iofSwitch.getId().getLong());
+                       // long switchId = iofSwitch.getId().getLong();
+                        cachedThreadPool.execute(new Runnable() {
+                            @Override
+                            public void run() {
+                                PacketInSampling packetInSampling = new PacketInSampling();
+                                long time = new Date().getTime();
+                                boolean flag = true;
+                                long curTime;
+                                while(flag) {
+                                    packetInSampling.sampling(2);
+                                    curTime = new Date().getTime();
+                                    try {   //流出等待时间，让线程池中的线程全部停止
+                                        sleep(6);
+
+                                    } catch (Exception e) {
+                                    }
+                                    if(curTime-time>200) {
+                                        flag = false;
+                                    }
+                                }
+                            }
+                        });
+
+
+
+                //线程池
+
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                MyLog.warn("qosEvaluation-NormalActionThread error");
+            }
+
+        } //end while
+
     } //end run
+
+
+
 
     /*public Set<Long> getSwitchIds() {
         return switchIds;

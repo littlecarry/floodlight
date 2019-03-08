@@ -356,6 +356,7 @@ public class NetworkStore {
 
 
                 packetCount = e.getPacketCount().getValue();
+                //System.out.println(packetCount+"------swithId"+switchId+"------------------------------------------------");
                 byteCount = e.getByteCount().getValue();
                 dstAdd =e.getMatch().get(MatchField.IPV4_DST);
                 srcAdd = e.getMatch().get(MatchField.IPV4_SRC);

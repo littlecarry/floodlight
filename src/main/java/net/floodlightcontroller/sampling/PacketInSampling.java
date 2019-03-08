@@ -19,20 +19,21 @@ public class PacketInSampling {
     static final int N = 6/*参考周期數*/, T = 34/*周期长度，单位为ms*/;  //T的确定与带宽时延丢包有关
     static long lastTime;
     static final double B=1.0, A=1.0;//系数
-    static final double initP = 0.01;
+    static final double initP = 0.5;
     static Map<Long, Integer> packetCountList = new HashMap<>();
     public static ConcurrentLinkedQueue<Map<String, Object>> sampledPackets = new ConcurrentLinkedQueue<>();
     static ConcurrentHashMap<String,ConcurrentHashMap<String, Object>> historyFlows = new ConcurrentHashMap<>();
     private ConcurrentHashMap<Long, Deque<Map<String, Map<String, Object>>>> allFlowAllTimeOfAllSwitch;
 
     //inFlowSampling params
-    static final double INCREASE_FACTOR = 1.2;
+    static final double INCREASE_FACTOR = 1.005;
     /*static int packetCounter = 1;
     public static HashMap<ItFlow, Integer> flowIntegerHashMap = new HashMap<>();//全局
     protected static List<Map<Integer, Object>> flowCouter = new ArrayList<>();
     protected static double packetSamplingPropobility;*/
 
     //public static void f(){}
+    static int num = 0;
 
     public void sampling(long switchId) { //该函数存在并发--
 
@@ -45,94 +46,80 @@ public class PacketInSampling {
             synchronized(allFlowAllTimeOfAllSwitch) {
                 //System.out.println("allFlowAllTimeOfAllSwitch--------"+allFlowAllTimeOfSwitch.size());
                 adaptiveAdjustmentForP(switchId);//得到该周期包采样概率p
-                int lengthOfTimes = allFlowAllTimeOfSwitch.size();
+                //int lengthOfTimes = allFlowAllTimeOfSwitch.size();
                 //MyLog.info("sampling:在该路由器采集:"+switchId+" allFlowAllTimeOfSwitch.size="+allFlowAllTimeOfSwitch.size()+" after function adaptiveAdjustmentForP");
                 Map<String, Map<String, Object>> curFlows = allFlowAllTimeOfSwitch.peekLast();
-                Map<String, Map<String, Object>> lastFlows;
+                //MyLog.info("----------sampling         switchId="+switchId+"    curFlows="+curFlows+"   "+allFlowAllTimeOfSwitch.peekFirst());
+
+
+                /*
                 if(allFlowAllTimeOfSwitch.size()>=2) {
                     allFlowAllTimeOfSwitch.removeLast();  //若不与前面的方法同步，会被插队，导致队尾加入新元素
                     lastFlows = allFlowAllTimeOfSwitch.peekLast();
+                    MyLog.info("----------lastFlows size>=2          switchId="+switchId+"    lastFlow="+curFlows+"    "+(lastFlows));
                     if(lastFlows == null)
                         lastFlows = new HashMap<>();
                     allFlowAllTimeOfSwitch.push(curFlows);
                 } else {
                     lastFlows = new HashMap<>();
-                }
+                    MyLog.info("----------lastFlows <2              lastFlow="+(lastFlows));*/
+                //}
                 //MyLog.info("sampling----curFlows.size="+curFlows.size());
 
                 HashMap<String, Map<String, Object>>  newFlows = new HashMap<>(); //新流，首次进入的流
                 HashMap<String, Map<String, Object>>  disFlows = new HashMap<>(); //旧流，取流差值
 
-                if(lastFlows == null || lastFlows.isEmpty()) {
-                    newFlows.putAll(curFlows);
-                } else { //必有非null的lastFlows
-                    for(String srcAndDst : curFlows.keySet()) {
-                        HashMap<String, Object> flow = new HashMap<>();
-                        flow.putAll(curFlows.get(srcAndDst)); //HashMap的声明，深拷贝
-                        String combineId = switchId + ":" + srcAndDst;
-                        ConcurrentHashMap tempFlow;
-                        if(!historyFlows.containsKey(combineId)) {
-                            tempFlow = historyFlows.put(combineId, new ConcurrentHashMap<>());
-                        } else {
-                            tempFlow = historyFlows.get(combineId);
-                        }
 
-                        if(!lastFlows.containsKey(srcAndDst)) {
-                            if(!(tempFlow.containsKey("isSampled")&&(int) tempFlow.get("isSampled")==1)) {
-                                newFlows.put(srcAndDst, flow);
-                            } else {
-                                disFlows.put(srcAndDst, flow);
-                            }
-
-                        } else {
-                            //MyLog.info("PacketSampling: isSampled="+flow.get("isSampled"));
-                            if(tempFlow.containsKey("isSampled")&&(int) tempFlow.get("isSampled")==1) { //该流之前必经过newFlowSampling模块，否则isSampled！=1
-                                long lastCount;
-                                if(tempFlow.containsKey("count")&&tempFlow.get("count")!=null) {
-                                    lastCount = (long) tempFlow.get("count");
-                                } else {
-                                    lastCount = 0;
-                                    MyLog.error("PacketSampling: 该流之前未经过newFlowSampling模块，该流为"+srcAndDst);
-                                }
-                                //long lastCount = (long) lastFlows.get(srcAndDst).get("count");
-                                long curCount =(long) curFlows.get(srcAndDst).get("count");
-                                if(curCount>lastCount) {//TODO >=还是>
-                                    long count = curCount-lastCount;
-                                    flow.put("count", count); //添加差值
-                                    disFlows.put(srcAndDst, flow);
-                                } else {
-
-                                    MyLog.error("PacketSampling:該流历史包数目大于流的当前包数目，该流为"+srcAndDst+" curCount="+curCount+" lastCount="+lastCount);
-                                }
-
-                            } else {
-                                newFlows.put(srcAndDst, flow);
-                            }
-
-                            long lastCount;
-                            if(tempFlow.containsKey("count")&&tempFlow.get("count")!=null) {
-                                lastCount = (long) tempFlow.get("count");
-                            } else {
-                                lastCount = 0;
-                            }
-                            long curCount = (long) flow.get("count");
-                            if(curCount>lastCount)
-                                tempFlow.put("count", curCount);
-                            else
-                                tempFlow.put("count", lastCount);
-                            historyFlows.put(combineId, tempFlow);
-                        }
-
+                for(String srcAndDst : curFlows.keySet()) {
+                    HashMap<String, Object> flow = new HashMap<>();
+                    flow.putAll(curFlows.get(srcAndDst)); //HashMap的声明，深拷贝
+                    String combineId = switchId + ":" + srcAndDst;
+                    ConcurrentHashMap tempFlow;
+                    if(!historyFlows.containsKey(combineId)) {
+                        tempFlow = new ConcurrentHashMap<>();
+                        historyFlows.put(combineId, tempFlow);
+                        //MyLog.info("----------not containsKey combineId              num="+(num++));
+                    } else {
+                        tempFlow = historyFlows.get(combineId);
+                        //MyLog.info("----------certain containsKey combineId              num="+(num++));
+                    }
+                    if(!tempFlow.containsKey("isSampled")) {
+                        tempFlow.put("isSampled", 0);
                     }
 
-                    //MyLog.info("PacketSampling:非null的lastFlows，填充新流和旧流");
-                    //MyLog.info("sampling----lastFlows == null   and     newFlows.size="+newFlows.size()+" disFlows.size="+disFlows.size()+" lastFlows.size="+lastFlows.size());
+                    //MyLog.info("PacketSampling: tempFlow="+tempFlow+"   isSampled=");
+                    if(tempFlow.containsKey("isSampled")&&(int) tempFlow.get("isSampled")==1) { //该流之前必经过newFlowSampling模块，否则isSampled！=1
+                        long lastCount;
+                        if(tempFlow.containsKey("count")&&tempFlow.get("count")!=null) {
+                            lastCount = (long) tempFlow.get("count");
+                            //MyLog.info("----------has count              num="+(num++));
+                        } else {
+                            lastCount = 0;
+                            MyLog.error("PacketSampling: 该流之前未经过newFlowSampling模块，该流为"+srcAndDst);
+                            //MyLog.info("----------no count              num="+(num++));
+                        }
+                        //long lastCount = (long) lastFlows.get(srcAndDst).get("count");
+                        long curCount =(long) curFlows.get(srcAndDst).get("count");
+                        if(curCount>lastCount) {//TODO >=还是>
+                            long count = curCount-lastCount;
+                            flow.put("count", count); //添加差值
+                            disFlows.put(srcAndDst, flow);
+
+                            //MyLog.info("----------normal              num="+(num++));
+                        } /*else {
+                            MyLog.error("PacketSampling:該流历史包数目大于流的当前包数目，该流为"+srcAndDst+" curCount="+curCount+" lastCount="+lastCount);
+                        }*/
+                        tempFlow.put("count", curCount); //更新当前count值，可能流表清空存在逆序
+
+                    } else { //未经过newFlowSampling模块，需要先进入该模块
+                        newFlows.put(srcAndDst, flow);
+                        MyLog.info("----------in else              num="+(num++));
+                    }
+
                 }
 
                 newFlowSampling(newFlows, curFlows, switchId);
                 flowCompression(disFlows, curFlows, switchId);//curFlows用于接收字段修改（并全局化）
-                /*newFlows.clear();
-                disFlows.clear();*/
 
                 //MyLog.info("sampledPackets.size="+sampledPackets.size());
             } //end synchronized
@@ -432,6 +419,7 @@ public class PacketInSampling {
                     tempFlow.put("time", flow.get("time"));
                     tempFlow.put("count", flow.get("count")); //packetCount(流中包含的包数目)
                     tempFlow.put("byteCount", flow.get("byteCount"));
+                    tempFlow.put("packetCount",flow.get("count")); //总包数，若流表不清空，该值等于count。由于流表清空，该值用于记录所有包数目，count记录当前计量包数目
 
                     historyFlows.put(combineId, tempFlow);
                    // flag = false;

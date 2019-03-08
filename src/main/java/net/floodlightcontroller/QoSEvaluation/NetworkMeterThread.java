@@ -48,6 +48,7 @@ public class NetworkMeterThread  extends Thread{
                 //发送流统计消息请求以交换机为单位，接收处理消息时按链路（链路源地址+源端口）为单位处理
                 for(DatapathId switchId : switches.getAllSwitchDpids()) {//统计信息请求直接发向指定交换机而针对链路（避免多条链路来自同一源交换机造成流量统计重复）
                     IOFSwitch aSwitch = switches.getSwitch(switchId);
+                    //System.out.println("-------------- switchId=="+switchId.getLong());
                     if(aSwitch ==null){
                         MyLog.warn("交换机为空-sw is null");
                         continue;
